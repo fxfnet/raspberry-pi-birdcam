@@ -128,3 +128,9 @@ Notes
 This project uses OpenCV DNN instead of TensorFlow Lite Python bindings because Debian Trixie with Python 3.13 does not currently provide an easily installable python3-tflite-runtime package.
 
 The detection model recognizes a generic bird class. It does not identify bird species.
+
+
+
+sur Raspberry Pi OS/Debian, il vaut mieux installer via apt :
+
+sudo apt install -y python3-picamera2 python3-opencv python3-numpy python3-flask
