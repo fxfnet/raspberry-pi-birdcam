@@ -1,0 +1,13 @@
+[Unit]
+Description=Raspberry Pi Birdcam Web Gallery
+After=network.target
+
+[Service]
+User=fx
+WorkingDirectory=/home/fx/birdcam/gallery
+ExecStart=/usr/bin/python3 /home/fx/birdcam/gallery/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

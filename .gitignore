@@ -1,0 +1,28 @@
+# Captured images
+captures/*
+!captures/.gitkeep
+
+# Downloaded AI models
+model/*
+!model/.gitkeep
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Logs
+*.log
+
+# OS/editor files
+.DS_Store
+*.swp
+*.swo
+
+# Local config
+.env
