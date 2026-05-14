@@ -42,23 +42,23 @@ MOTION_SIZE = (640, 480)
 # Timing settings
 # ------------------------------------------------------------
 
-LOOP_DELAY_SECONDS = 0.08
+LOOP_DELAY_SECONDS = 0.03
 WARMUP_SECONDS = 2.0
 
 # Keep a few recent frames in memory.
-FRAME_BUFFER_SIZE = 8
+FRAME_BUFFER_SIZE = 30
 
 # Use the latest frame when movement is detected.
 # Earlier values like -4 can save a frame before the bird is visible.
 FRAME_TO_SAVE_FROM_BUFFER = -1
 
 # Allows several captures during a visit.
-MIN_SECONDS_BETWEEN_SHOTS = 1.0
+MIN_SECONDS_BETWEEN_SHOTS = 0.7
 
 # Burst after motion detection.
 # This increases the chance of catching fast birds.
-BURST_COUNT = 4
-BURST_INTERVAL_SECONDS = 0.25
+BURST_COUNT = 8
+BURST_INTERVAL_SECONDS = 0.12
 
 
 # ------------------------------------------------------------
@@ -66,7 +66,7 @@ BURST_INTERVAL_SECONDS = 0.25
 # ------------------------------------------------------------
 
 MOTION_THRESHOLD = 1200
-PIXEL_DIFF_THRESHOLD = 25
+PIXEL_DIFF_THRESHOLD = 30
 
 
 # ------------------------------------------------------------
@@ -127,16 +127,31 @@ def safe_label(label: str) -> str:
 def atomic_rename(src: Path, dst: Path):
     os.replace(str(src), str(dst))
 
-
 def save_rgb_jpeg(rgb_frame, filename: Path):
     """
-    Save RGB frame as JPEG using OpenCV.
-    OpenCV expects BGR.
+    Save camera frame as JPEG with corrected colors.
+
+    Correction déduite de la mire :
+    - rouge et bleu inversés dans la chaîne actuelle ;
+    - gains RGB simples issus de la comparaison avec le PDF ColorChecker.
     """
-    bgr_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
+
+    color_gains = np.array((0.831, 0.883, 0.754), dtype=np.float32)
+
+    # Correction principale : swap rouge / bleu.
+    corrected_rgb = rgb_frame[:, :, [2, 1, 0]].astype(np.float32)
+
+    # Correction secondaire : gains par canal.
+    corrected_rgb = corrected_rgb * color_gains
+
+    corrected_rgb = np.clip(corrected_rgb, 0, 255).astype(np.uint8)
+
+    # OpenCV écrit en BGR.
+    corrected_bgr = cv2.cvtColor(corrected_rgb, cv2.COLOR_RGB2BGR)
+
     cv2.imwrite(
         str(filename),
-        bgr_frame,
+        corrected_bgr,
         [int(cv2.IMWRITE_JPEG_QUALITY), 90],
     )
 
@@ -218,7 +233,13 @@ camera_config = picam2.create_video_configuration(
     main={
         "size": CAMERA_SIZE,
         "format": "RGB888",
+    },
+    controls={
+        "FrameRate": 20,
+        "ExposureTime": 3000,
+        "AnalogueGain": 4.0,
     }
+
 )
 
 
