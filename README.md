@@ -45,11 +45,13 @@ birdcam/
 │   └── birdcam-gallery.service
 ├── model/
 └── captures/
+```
 
-Install dependencies
+## Install dependencies
 
 On Raspberry Pi OS / Debian:
 
+```bash
 sudo apt update
 sudo apt install -y \
   python3-picamera2 \
@@ -57,19 +59,33 @@ sudo apt install -y \
   python3-numpy \
   python3-flask \
   wget
-Install the AI model
+```
+
+## Install the AI model
+
+```bash
 ./scripts/install_models.sh
+```
 
 This downloads the MobileNet SSD Caffe model used by OpenCV DNN.
 
-Run the birdcam manually
+## Run the birdcam manually
+
+```bash
 python3 birdcam_motion.py
+```
 
 Captured pictures are stored in:
 
+```
 ~/birdcam/captures
-Run the web gallery manually
+```
+
+## Run the web gallery manually
+
+```bash
 python3 gallery/app.py
+```
 
 Then open:
 
@@ -78,59 +94,81 @@ http://raspberrypi.local:5000
 or:
 
 http://<raspberry-pi-ip>:5000
-Install autorun services
+
+## Install autorun services
+
+```bash
 ./scripts/install_services.sh
+```
 
 Start services:
 
+```bash
 sudo systemctl start birdcam
 sudo systemctl start birdcam-gallery
+```
 
 Check status:
 
+```bash
 systemctl status birdcam
 systemctl status birdcam-gallery
+```
 
 View logs:
 
+```bash
 journalctl -u birdcam -f
 journalctl -u birdcam-gallery -f
-Tuning
+```
+
+## Tuning
 
 Main settings are inside birdcam_motion.py.
 
 Useful parameters:
 
+```
 MOTION_THRESHOLD = 1200
 BIRD_CONFIDENCE_THRESHOLD = 0.45
 MIN_SECONDS_BETWEEN_SHOTS = 1.0
 BURST_COUNT = 4
 BURST_INTERVAL_SECONDS = 0.25
 CAMERA_SIZE = (1280, 960)
+```
 
 If too many false movements are captured, increase:
 
+```
 MOTION_THRESHOLD
+```
 
 If birds are missed, decrease:
 
+```
 BIRD_CONFIDENCE_THRESHOLD
+```
 
 If the bird is too fast, increase:
 
+```
 BURST_COUNT
+```
 
 or reduce:
 
+```
 BURST_INTERVAL_SECONDS
-Notes
+```
+
+## Notes
 
 This project uses OpenCV DNN instead of TensorFlow Lite Python bindings because Debian Trixie with Python 3.13 does not currently provide an easily installable python3-tflite-runtime package.
 
 The detection model recognizes a generic bird class. It does not identify bird species.
 
+On Raspberry Pi OS/Debian, it is better to install via apt:
 
-
-sur Raspberry Pi OS/Debian, il vaut mieux installer via apt :
-
+```bash
 sudo apt install -y python3-picamera2 python3-opencv python3-numpy python3-flask
+```
