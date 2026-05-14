@@ -26,3 +26,5 @@ env/
 
 # Local config
 .env
+
+gallery/thumbs
