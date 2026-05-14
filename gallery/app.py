@@ -295,29 +295,23 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="status-panel">
-        <div class="status-item">
-            <span class="status-dot {{ 'ok' if status.birdcam_service.active else 'bad' }}"></span>
-            Camera: {{ status.birdcam_service.status }}
-        </div>
-
-        <div class="status-item">
-            <span class="status-dot {{ 'ok' if status.gallery_service.active else 'bad' }}"></span>
-            Gallery: {{ status.gallery_service.status }}
-        </div>
-
-        <div class="status-item">
-            Latest: {{ status.latest_date }}
-        </div>
-
-        <div class="status-item">
+         <div class="status-item">
             Birds: {{ status.bird_count }}
         </div>
 
         <div class="status-item">
             Motion: {{ status.motion_count }}
         </div>
+        <div class="status-item">
+            Latest: {{ status.latest_date }}
+        </div>
 
         <div class="status-item">
+            <span class="status-dot {{ 'ok' if status.birdcam_service.active else 'bad' }}"></span>
+            Camera: {{ status.birdcam_service.status }}
+        </div>
+
+         <div class="status-item">
             Disk: {{ status.free_gb }} GB free / {{ status.total_gb }} GB · {{ status.used_percent }}% used
         </div>
     </div>
@@ -499,7 +493,6 @@ def build_status(all_images):
 
     return {
         "birdcam_service": service_status("birdcam"),
-        "gallery_service": service_status("birdcam-gallery"),
         "bird_count": sum(1 for image in all_images if image["kind"] == "bird"),
         "motion_count": sum(1 for image in all_images if image["kind"] == "motion"),
         "latest_name": latest_name,
