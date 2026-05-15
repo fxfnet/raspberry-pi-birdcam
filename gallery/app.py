@@ -8,6 +8,7 @@ import shutil
 import math
 import re
 import cv2
+import os
 
 
 app = Flask(__name__)
@@ -23,6 +24,10 @@ MAX_PER_PAGE = 96
 THUMB_WIDTH = 420
 THUMB_JPEG_QUALITY = 80
 
+# Public mode by default.
+# Admin mode only when BIRDCAM_ADMIN=1 is set in the systemd service.
+ADMIN_MODE = os.environ.get("BIRDCAM_ADMIN", "0") == "1"
+
 THUMB_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -31,7 +36,7 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Birdcam Gallery</title>
+    <title>{{ "Birdcam Admin" if admin_mode else "Birdcam Gallery" }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
@@ -45,6 +50,7 @@ HTML_TEMPLATE = """
             --bird: #2ecc71;
             --motion: #f39c12;
             --danger: #e74c3c;
+            --blue: #3498db;
         }
 
         body {
@@ -143,6 +149,16 @@ HTML_TEMPLATE = """
             background: var(--danger);
         }
 
+        .admin-warning {
+            margin-top: 0.9rem;
+            color: #111;
+            background: var(--motion);
+            border-radius: 10px;
+            padding: 0.6rem 0.8rem;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
         .gallery {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -184,6 +200,7 @@ HTML_TEMPLATE = """
             font-weight: 700;
             letter-spacing: 0.04em;
             box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+            z-index: 2;
         }
 
         .badge.bird {
@@ -215,6 +232,45 @@ HTML_TEMPLATE = """
             color: #aaa;
         }
 
+        .admin-actions {
+            margin-top: 0.75rem;
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .button-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.45rem;
+        }
+
+        .action-button {
+            width: 100%;
+            color: #eee;
+            border-radius: 999px;
+            padding: 0.45rem 0.7rem;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+
+        .tag-button {
+            background: #1f3140;
+            border: 1px solid #375f80;
+        }
+
+        .tag-button:hover {
+            background: #29445a;
+        }
+
+        .delete-button {
+            background: #3a1f1f;
+            border: 1px solid #703030;
+        }
+
+        .delete-button:hover {
+            background: #5a2a2a;
+        }
+
         .empty {
             padding: 2rem;
             color: #aaa;
@@ -226,31 +282,12 @@ HTML_TEMPLATE = """
             font-size: 0.8rem;
             text-align: center;
         }
-
-.delete-form {
-    margin-top: 0.7rem;
-}
-
-.delete-button {
-    width: 100%;
-    color: #eee;
-    background: #3a1f1f;
-    border: 1px solid #703030;
-    border-radius: 999px;
-    padding: 0.45rem 0.7rem;
-    font-size: 0.82rem;
-    cursor: pointer;
-}
-
-.delete-button:hover {
-    background: #5a2a2a;
-}
     </style>
 </head>
 <body>
 
 <header>
-    <h1>Birdcam Gallery</h1>
+    <h1>{{ "Birdcam Admin" if admin_mode else "Birdcam Gallery" }}</h1>
 
     <div class="subtitle">
         {{ count }} picture{{ "" if count == 1 else "s" }} shown ·
@@ -295,61 +332,89 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="status-panel">
-         <div class="status-item">
+        <div class="status-item">
+            <span class="status-dot {{ 'ok' if status.birdcam_service.active else 'bad' }}"></span>
+            Camera: {{ status.birdcam_service.status }}
+        </div>
+
+        <div class="status-item">
             Birds: {{ status.bird_count }}
         </div>
 
         <div class="status-item">
             Motion: {{ status.motion_count }}
         </div>
+
         <div class="status-item">
             Latest: {{ status.latest_date }}
         </div>
 
         <div class="status-item">
-            <span class="status-dot {{ 'ok' if status.birdcam_service.active else 'bad' }}"></span>
-            Camera: {{ status.birdcam_service.status }}
-        </div>
-
-         <div class="status-item">
             Disk: {{ status.free_gb }} GB free / {{ status.total_gb }} GB · {{ status.used_percent }}% used
         </div>
     </div>
+
+    {% if admin_mode %}
+    <div class="admin-warning">
+        ADMIN MODE · Delete and retag actions are enabled.
+    </div>
+    {% endif %}
 </header>
 
 {% if images %}
 <main class="gallery">
     {% for image in images %}
     <div class="card">
-    <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
+        <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
 
-    <a href="/image/{{ image.name }}" target="_blank">
-        <img src="/thumb/{{ image.name }}" loading="lazy" alt="{{ image.name }}">
-    </a>
+        <a href="/image/{{ image.name }}" target="_blank">
+            <img src="/thumb/{{ image.name }}" loading="lazy" alt="{{ image.name }}">
+        </a>
 
-    <div class="meta">
-        <div class="filename">{{ image.name }}</div>
+        <div class="meta">
+            <div class="filename">{{ image.name }}</div>
 
-        <div class="details">
-            <div>{{ image.date }}</div>
-            <div>Best: {{ image.best_label }}</div>
-            <div>Confidence: {{ image.confidence }}</div>
-            <div>Motion score: {{ image.motion_score }}</div>
+            <div class="details">
+                <div>{{ image.date }}</div>
+                <div>Best: {{ image.best_label }}</div>
+                <div>Confidence: {{ image.confidence }}</div>
+                <div>Motion score: {{ image.motion_score }}</div>
+            </div>
+
+            {% if admin_mode %}
+            <div class="admin-actions">
+                <div class="button-row">
+                    <form method="post" action="/retag/{{ image.name }}">
+                        <input type="hidden" name="new_tag" value="bird">
+                        <input type="hidden" name="filter" value="{{ mode }}">
+                        <input type="hidden" name="page" value="{{ page }}">
+                        <input type="hidden" name="per_page" value="{{ per_page }}">
+                        <button type="submit" class="action-button tag-button">Mark Bird</button>
+                    </form>
+
+                    <form method="post" action="/retag/{{ image.name }}">
+                        <input type="hidden" name="new_tag" value="motion">
+                        <input type="hidden" name="filter" value="{{ mode }}">
+                        <input type="hidden" name="page" value="{{ page }}">
+                        <input type="hidden" name="per_page" value="{{ per_page }}">
+                        <button type="submit" class="action-button tag-button">Mark Motion</button>
+                    </form>
+                </div>
+
+                <form
+                    method="post"
+                    action="/delete/{{ image.name }}"
+                    onsubmit="return confirm('Delete this picture?');"
+                >
+                    <input type="hidden" name="filter" value="{{ mode }}">
+                    <input type="hidden" name="page" value="{{ page }}">
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                    <button type="submit" class="action-button delete-button">Delete</button>
+                </form>
+            </div>
+            {% endif %}
         </div>
-
-        <form
-            method="post"
-            action="/delete/{{ image.name }}"
-            onsubmit="return confirm('Delete this picture?');"
-            class="delete-form"
-        >
-            <input type="hidden" name="filter" value="{{ mode }}">
-            <input type="hidden" name="page" value="{{ page }}">
-            <input type="hidden" name="per_page" value="{{ per_page }}">
-            <button type="submit" class="delete-button">Delete</button>
-        </form>
     </div>
-</div>
     {% endfor %}
 </main>
 {% else %}
@@ -359,7 +424,7 @@ HTML_TEMPLATE = """
 {% endif %}
 
 <footer>
-    Raspberry Pi Birdcam
+    Raspberry Pi Birdcam · {{ "admin" if admin_mode else "public" }} mode
 </footer>
 
 </body>
@@ -519,19 +584,66 @@ def safe_image_path(filename):
 
     return path
 
-def delete_image_and_thumbnail(filename: str):
-    image_path = safe_image_path(filename)
-    thumb_path = thumb_path_for(filename)
 
-    if image_path.exists():
-        image_path.unlink()
+def require_admin():
+    if not ADMIN_MODE:
+        abort(403)
 
-    if thumb_path.exists():
-        thumb_path.unlink()
 
 def thumb_path_for(filename: str):
     safe_name = filename.replace("/", "_")
     return THUMB_DIR / safe_name
+
+
+def delete_thumbnail(filename: str):
+    thumb = thumb_path_for(filename)
+    if thumb.exists():
+        thumb.unlink()
+
+
+def delete_image_and_thumbnail(filename: str):
+    require_admin()
+
+    image_path = safe_image_path(filename)
+    delete_thumbnail(filename)
+
+    if image_path.exists():
+        image_path.unlink()
+
+
+def retag_image(filename: str, new_tag: str):
+    require_admin()
+
+    if new_tag not in {"bird", "motion"}:
+        abort(400)
+
+    image_path = safe_image_path(filename)
+    old_name = image_path.name
+
+    if old_name.startswith("bird_"):
+        rest = old_name[len("bird_"):]
+    elif old_name.startswith("motion_"):
+        rest = old_name[len("motion_"):]
+    else:
+        rest = old_name
+
+    new_name = f"{new_tag}_{rest}"
+    new_path = CAPTURE_DIR / new_name
+
+    counter = 1
+    while new_path.exists() and new_path.name != old_name:
+        stem = Path(new_name).stem
+        suffix = Path(new_name).suffix
+        new_path = CAPTURE_DIR / f"{stem}_retag{counter}{suffix}"
+        counter += 1
+
+    delete_thumbnail(old_name)
+
+    image_path.rename(new_path)
+
+    delete_thumbnail(new_path.name)
+
+    return new_path.name
 
 
 def ensure_thumbnail(filename: str):
@@ -576,6 +688,17 @@ def parse_int_arg(name: str, default: int, minimum: int, maximum: int):
     return max(minimum, min(value, maximum))
 
 
+def current_nav_args_from_form():
+    mode = request.form.get("filter", "all")
+    page = request.form.get("page", "1")
+    per_page = request.form.get("per_page", str(DEFAULT_PER_PAGE))
+
+    if mode not in {"all", "bird", "motion"}:
+        mode = "all"
+
+    return mode, page, per_page
+
+
 @app.route("/")
 def index():
     mode = request.args.get("filter", "all")
@@ -607,6 +730,7 @@ def index():
         mode=mode,
         status=status,
         capture_dir=str(CAPTURE_DIR),
+        admin_mode=ADMIN_MODE,
     )
 
 
@@ -624,20 +748,18 @@ def thumb(filename):
 
 @app.route("/clear-thumbs")
 def clear_thumbs():
+    require_admin()
+
     for path in THUMB_DIR.iterdir():
         if path.is_file():
             path.unlink()
 
     return redirect(url_for("index"))
 
+
 @app.route("/delete/<path:filename>", methods=["POST"])
 def delete_image(filename):
-    mode = request.form.get("filter", "all")
-    page = request.form.get("page", "1")
-    per_page = request.form.get("per_page", str(DEFAULT_PER_PAGE))
-
-    if mode not in {"all", "bird", "motion"}:
-        mode = "all"
+    mode, page, per_page = current_nav_args_from_form()
 
     delete_image_and_thumbnail(filename)
 
@@ -650,9 +772,29 @@ def delete_image(filename):
         )
     )
 
+
+@app.route("/retag/<path:filename>", methods=["POST"])
+def retag(filename):
+    mode, page, per_page = current_nav_args_from_form()
+    new_tag = request.form.get("new_tag", "")
+
+    retag_image(filename, new_tag)
+
+    return redirect(
+        url_for(
+            "index",
+            filter=mode,
+            page=page,
+            per_page=per_page,
+        )
+    )
+
+
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "5000"))
+
     app.run(
         host="0.0.0.0",
-        port=5000,
+        port=port,
         debug=False,
     )

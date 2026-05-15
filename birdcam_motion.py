@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import numpy as np
 from picamera2 import Picamera2
 from datetime import datetime
 from pathlib import Path
