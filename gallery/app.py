@@ -520,7 +520,12 @@ header.compact .per-page a {
 {% endif %}
 
 <footer>
-    Raspberry Pi Birdcam · {{ "admin" if admin_mode else "public" }} mode
+    Raspberry Pi Birdcam · {{ "admin" if admin_mode else "public" }} mode ·
+    <a href="https://toysfab.com/2026/05/une-camera-automatique-pour-mangeoire-a-oiseaux-avec-un-raspberry-pi/"
+       target="_blank"
+       rel="noopener noreferrer">
+        Toysfab article
+    </a>
 </footer>
 
 <script>
