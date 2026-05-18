@@ -276,6 +276,97 @@ HTML_TEMPLATE = """
             color: #aaa;
         }
 
+.status-toggle {
+    display: none;
+    margin-top: 0.45rem;
+    color: var(--text);
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.78rem;
+}
+
+header {
+    transition: padding 0.18s ease, box-shadow 0.18s ease;
+}
+
+header.compact {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+}
+
+header.compact h1 {
+    font-size: 1rem;
+}
+
+header.compact .subtitle,
+header.compact .status-panel,
+header.compact .per-page,
+header.compact .pagination,
+header.compact .admin-warning {
+    display: none;
+}
+
+header.compact .filters {
+    margin-top: 0.45rem;
+}
+
+header.compact .filter,
+header.compact .page-link,
+header.compact .per-page a {
+    padding: 0.32rem 0.55rem;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 700px) {
+    header {
+        padding: 0.85rem;
+    }
+
+    h1 {
+        font-size: 1.15rem;
+    }
+
+    .subtitle {
+        font-size: 0.78rem;
+    }
+
+    .filters {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 0.15rem;
+    }
+
+    .pagination {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 0.15rem;
+    }
+
+    .status-panel {
+        gap: 0.35rem;
+        font-size: 0.75rem;
+    }
+
+    .status-item {
+        padding: 0.32rem 0.5rem;
+    }
+
+    .status-toggle {
+        display: inline-flex;
+    }
+
+    header.compact .status-panel {
+        display: none;
+    }
+
+    body.show-status header.compact .status-panel {
+        display: flex;
+    }
+}
+
         footer {
             padding: 1rem;
             color: #777;
@@ -286,7 +377,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
 
-<header>
+<header id="page-header">
     <h1>{{ "Birdcam Admin" if admin_mode else "Birdcam Gallery" }}</h1>
 
     <div class="subtitle">
@@ -300,6 +391,7 @@ HTML_TEMPLATE = """
         <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
         <a class="filter {{ 'active' if mode == 'bird' else '' }}" href="/?filter=bird&per_page={{ per_page }}">Birds</a>
         <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Motion only</a>
+        <a class="filter" href="/stats">Stats</a>
     </div>
 
     <div class="pagination">
@@ -330,6 +422,10 @@ HTML_TEMPLATE = """
             </a>
         {% endfor %}
     </div>
+
+<button class="status-toggle" onclick="document.body.classList.toggle('show-status')">
+    Status
+</button>
 
     <div class="status-panel">
         <div class="status-item">
@@ -427,10 +523,349 @@ HTML_TEMPLATE = """
     Raspberry Pi Birdcam · {{ "admin" if admin_mode else "public" }} mode
 </footer>
 
+<script>
+    const header = document.getElementById("page-header");
+
+    function updateHeaderCompactMode() {
+        if (!header) return;
+
+        if (window.scrollY > 80) {
+            header.classList.add("compact");
+        } else {
+            header.classList.remove("compact");
+            document.body.classList.remove("show-status");
+        }
+    }
+
+    window.addEventListener("scroll", updateHeaderCompactMode, { passive: true });
+    updateHeaderCompactMode();
+</script>
+
 </body>
 </html>
 """
 
+STATS_TEMPLATE = """
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Birdcam Stats</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        :root {
+            --bg: #101010;
+            --panel: #1b1b1b;
+            --panel2: #242424;
+            --border: #333;
+            --text: #eee;
+            --muted: #aaa;
+            --bird: #2ecc71;
+            --motion: #f39c12;
+            --unknown: #777;
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        header {
+            padding: 1.2rem;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.4rem;
+        }
+
+        h2 {
+            margin: 2rem 0 1rem;
+            font-size: 1.1rem;
+        }
+
+        .subtitle {
+            margin-top: 0.35rem;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .tabs {
+            margin-top: 0.9rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            color: var(--text);
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.45rem 0.75rem;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+
+        .tab.active {
+            background: #eee;
+            color: #111;
+            border-color: #eee;
+        }
+
+        main {
+            padding: 1rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.8rem;
+            margin-top: 1rem;
+        }
+
+        .summary-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .summary-number {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .summary-label {
+            color: var(--muted);
+            font-size: 0.85rem;
+            margin-top: 0.2rem;
+        }
+
+        .chart {
+            display: grid;
+            gap: 0.55rem;
+        }
+
+        .bar-row {
+            display: grid;
+            grid-template-columns: 90px 1fr 70px;
+            gap: 0.75rem;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .bar-label {
+            color: #ddd;
+            white-space: nowrap;
+        }
+
+        .bar-track {
+            height: 24px;
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .bar-bird {
+            background: var(--bird);
+            height: 100%;
+        }
+
+        .bar-motion {
+            background: var(--motion);
+            height: 100%;
+        }
+
+        .bar-unknown {
+            background: var(--unknown);
+            height: 100%;
+        }
+
+        .bar-value {
+            color: var(--muted);
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 0.65rem;
+            border-bottom: 1px solid var(--border);
+            text-align: right;
+            font-size: 0.85rem;
+        }
+
+        th:first-child,
+        td:first-child {
+            text-align: left;
+        }
+
+        th {
+            color: #fff;
+            background: var(--panel2);
+        }
+
+        td {
+            color: #ddd;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        footer {
+            padding: 1rem;
+            color: #777;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Birdcam Stats</h1>
+    <div class="subtitle">
+        Statistics from captured pictures
+    </div>
+
+    <div class="tabs">
+        <a class="tab" href="/">Gallery</a>
+        <a class="tab active" href="/stats">Stats</a>
+    </div>
+</header>
+
+<main>
+    <section class="summary">
+        <div class="summary-card">
+            <div class="summary-number">{{ stats.total }}</div>
+            <div class="summary-label">Total pictures</div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-number">{{ stats.total_bird }}</div>
+            <div class="summary-label">Bird pictures</div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-number">{{ stats.total_motion }}</div>
+            <div class="summary-label">Motion only</div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-number">{{ stats.total_unknown }}</div>
+            <div class="summary-label">Unknown</div>
+        </div>
+    </section>
+
+    <h2>Pictures by hour</h2>
+
+    <section class="chart">
+        {% for row in stats.hourly_rows %}
+        <div class="bar-row">
+            <div class="bar-label">{{ row.hour }}</div>
+
+            <div class="bar-track">
+                {% if row.total > 0 %}
+                    <div class="bar-bird"
+                         style="width: {{ (row.bird / stats.max_hourly_total * 100) | round(1) }}%">
+                    </div>
+                    <div class="bar-motion"
+                         style="width: {{ (row.motion / stats.max_hourly_total * 100) | round(1) }}%">
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="bar-value">
+                {{ row.total }} total · {{ row.bird }} bird
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+
+    <h2>Pictures by day</h2>
+
+    <section class="chart">
+        {% for row in stats.daily_rows %}
+        <div class="bar-row">
+            <div class="bar-label">{{ row.day }}</div>
+
+            <div class="bar-track">
+                {% if row.total > 0 %}
+                    <div class="bar-bird"
+                         style="width: {{ (row.bird / stats.max_daily_total * 100) | round(1) }}%">
+                    </div>
+                    <div class="bar-motion"
+                         style="width: {{ (row.motion / stats.max_daily_total * 100) | round(1) }}%">
+                    </div>
+                    <div class="bar-unknown"
+                         style="width: {{ (row.unknown / stats.max_daily_total * 100) | round(1) }}%">
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="bar-value">
+                {{ row.total }} total · {{ row.bird }} bird
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+
+    <h2>Daily table</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Day</th>
+                <th>Bird</th>
+                <th>Motion</th>
+                <th>Unknown</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in stats.daily_rows %}
+            <tr>
+                <td>{{ row.day }}</td>
+                <td>{{ row.bird }}</td>
+                <td>{{ row.motion }}</td>
+                <td>{{ row.unknown }}</td>
+                <td>{{ row.total }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</main>
+
+<footer>
+    Raspberry Pi Birdcam
+</footer>
+
+</body>
+</html>
+"""
 
 def parse_image_metadata(path: Path):
     name = path.name
@@ -565,6 +1000,86 @@ def build_status(all_images):
         "free_gb": f"{free_gb:.1f}",
         "total_gb": f"{total_gb:.1f}",
         "used_percent": f"{used_percent:.0f}",
+    }
+
+def build_stats(all_images):
+    """
+    Build simple daily and hourly statistics from image metadata.
+    Uses file modification time, which is stable enough for the gallery.
+    """
+
+    daily = {}
+    hourly = {hour: {"bird": 0, "motion": 0, "total": 0} for hour in range(24)}
+
+    total_bird = 0
+    total_motion = 0
+    total_unknown = 0
+
+    for image in all_images:
+        dt = datetime.fromtimestamp(image["mtime"])
+        day_key = dt.strftime("%Y-%m-%d")
+        hour_key = dt.hour
+
+        kind = image["kind"]
+
+        if day_key not in daily:
+            daily[day_key] = {
+                "bird": 0,
+                "motion": 0,
+                "unknown": 0,
+                "total": 0,
+            }
+
+        if kind == "bird":
+            daily[day_key]["bird"] += 1
+            hourly[hour_key]["bird"] += 1
+            total_bird += 1
+        elif kind == "motion":
+            daily[day_key]["motion"] += 1
+            hourly[hour_key]["motion"] += 1
+            total_motion += 1
+        else:
+            daily[day_key]["unknown"] += 1
+            total_unknown += 1
+
+        daily[day_key]["total"] += 1
+        hourly[hour_key]["total"] += 1
+
+    daily_rows = []
+
+    for day in sorted(daily.keys(), reverse=True):
+        row = daily[day]
+        daily_rows.append({
+            "day": day,
+            "bird": row["bird"],
+            "motion": row["motion"],
+            "unknown": row["unknown"],
+            "total": row["total"],
+        })
+
+    hourly_rows = []
+
+    for hour in range(24):
+        row = hourly[hour]
+        hourly_rows.append({
+            "hour": f"{hour:02d}:00",
+            "bird": row["bird"],
+            "motion": row["motion"],
+            "total": row["total"],
+        })
+
+    max_daily_total = max([row["total"] for row in daily_rows], default=1)
+    max_hourly_total = max([row["total"] for row in hourly_rows], default=1)
+
+    return {
+        "daily_rows": daily_rows,
+        "hourly_rows": hourly_rows,
+        "max_daily_total": max_daily_total,
+        "max_hourly_total": max_hourly_total,
+        "total_bird": total_bird,
+        "total_motion": total_motion,
+        "total_unknown": total_unknown,
+        "total": total_bird + total_motion + total_unknown,
     }
 
 
@@ -789,6 +1304,15 @@ def retag(filename):
         )
     )
 
+@app.route("/stats")
+def stats_page():
+    all_images = get_all_images()
+    stats = build_stats(all_images)
+
+    return render_template_string(
+        STATS_TEMPLATE,
+        stats=stats,
+    )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
