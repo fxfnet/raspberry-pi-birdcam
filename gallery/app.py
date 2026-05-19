@@ -2,7 +2,7 @@
 
 from flask import Flask, render_template_string, send_from_directory, abort, request, redirect, url_for
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date
 import subprocess
 import shutil
 import math
@@ -41,43 +41,100 @@ HTML_TEMPLATE = """
 
     <style>
         :root {
-            --bg: #101010;
-            --panel: #1b1b1b;
-            --panel2: #242424;
-            --border: #333;
-            --text: #eee;
-            --muted: #aaa;
-            --bird: #2ecc71;
-            --motion: #f39c12;
-            --danger: #e74c3c;
-            --blue: #3498db;
+            --bg: #0d1110;
+            --panel: #171d1b;
+            --panel2: #222b27;
+            --panel3: #101614;
+            --border: #34413b;
+            --text: #f2f1e8;
+            --muted: #a9b3ad;
+            --bird: #5fd38d;
+            --motion: #f0b35a;
+            --danger: #e46d5d;
+            --blue: #70a7d8;
+            --paper: #f4e7c5;
+            --toysfab: #ffcf70;
         }
 
         body {
             margin: 0;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: var(--bg);
+            background:
+                radial-gradient(circle at top left, rgba(95, 211, 141, 0.12), transparent 34rem),
+                radial-gradient(circle at top right, rgba(240, 179, 90, 0.10), transparent 30rem),
+                var(--bg);
             color: var(--text);
         }
 
         header {
             padding: 1.2rem;
-            background: var(--panel);
+            background: rgba(23, 29, 27, 0.96);
             border-bottom: 1px solid var(--border);
             position: sticky;
             top: 0;
             z-index: 10;
+            backdrop-filter: blur(8px);
+            transition: padding 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        header.compact {
+            padding-top: 0.55rem;
+            padding-bottom: 0.55rem;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+        }
+
+        header.compact h1 {
+            font-size: 1rem;
+        }
+
+        header.compact .subtitle,
+        header.compact .status-panel,
+        header.compact .public-summary,
+        header.compact .per-page,
+        header.compact .pagination,
+        header.compact .admin-warning,
+        header.compact .hero-intro {
+            display: none;
+        }
+
+        header.compact .filters {
+            margin-top: 0.45rem;
+        }
+
+        header.compact .filter,
+        header.compact .page-link,
+        header.compact .per-page a {
+            padding: 0.32rem 0.55rem;
+            font-size: 0.78rem;
         }
 
         h1 {
             margin: 0;
-            font-size: 1.4rem;
+            font-size: 1.45rem;
+            letter-spacing: 0.01em;
         }
 
         .subtitle {
             margin-top: 0.35rem;
             color: var(--muted);
             font-size: 0.9rem;
+        }
+
+        .hero-intro {
+            margin-top: 0.7rem;
+            max-width: 760px;
+            color: #d8ded9;
+            font-size: 0.92rem;
+            line-height: 1.45;
+        }
+
+        .hero-intro a {
+            color: var(--toysfab);
+            text-decoration: none;
+        }
+
+        .hero-intro a:hover {
+            text-decoration: underline;
         }
 
         .filters,
@@ -105,14 +162,27 @@ HTML_TEMPLATE = """
         .filter.active,
         .page-link.active,
         .per-page a.active {
-            background: #eee;
+            background: var(--paper);
             color: #111;
-            border-color: #eee;
+            border-color: var(--paper);
         }
 
         .page-link.disabled {
             opacity: 0.35;
             pointer-events: none;
+        }
+
+        .public-summary {
+            margin-top: 0.9rem;
+            color: #e7ece8;
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.45rem 0.75rem;
+            display: inline-flex;
+            font-size: 0.85rem;
+            gap: 0.35rem;
+            flex-wrap: wrap;
         }
 
         .status-panel {
@@ -157,6 +227,64 @@ HTML_TEMPLATE = """
             padding: 0.6rem 0.8rem;
             font-size: 0.9rem;
             font-weight: 700;
+        }
+
+        .latest-star {
+            margin: 14px;
+            background:
+                linear-gradient(135deg, rgba(255, 207, 112, 0.14), rgba(95, 211, 141, 0.08)),
+                var(--panel);
+            border: 1px solid rgba(255, 207, 112, 0.4);
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+        }
+
+        .latest-star a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .latest-star-inner {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
+            gap: 0;
+        }
+
+        .latest-star img {
+            width: 100%;
+            height: 360px;
+            object-fit: cover;
+            display: block;
+            background: #222;
+        }
+
+        .latest-star-text {
+            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .latest-star-kicker {
+            color: var(--toysfab);
+            font-size: 0.82rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .latest-star-title {
+            margin-top: 0.35rem;
+            font-size: 1.45rem;
+            font-weight: 800;
+        }
+
+        .latest-star-meta {
+            margin-top: 0.45rem;
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
         }
 
         .gallery {
@@ -211,6 +339,12 @@ HTML_TEMPLATE = """
             background: var(--motion);
         }
 
+        .badge.star {
+            left: auto;
+            right: 10px;
+            background: var(--toysfab);
+        }
+
         .meta {
             padding: 0.75rem;
             font-size: 0.83rem;
@@ -262,6 +396,15 @@ HTML_TEMPLATE = """
             background: #29445a;
         }
 
+        .star-button {
+            background: #3f351b;
+            border: 1px solid #8d722d;
+        }
+
+        .star-button:hover {
+            background: #5b4a22;
+        }
+
         .delete-button {
             background: #3a1f1f;
             border: 1px solid #703030;
@@ -276,96 +419,16 @@ HTML_TEMPLATE = """
             color: #aaa;
         }
 
-.status-toggle {
-    display: none;
-    margin-top: 0.45rem;
-    color: var(--text);
-    background: var(--panel2);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.35rem 0.65rem;
-    font-size: 0.78rem;
-}
-
-header {
-    transition: padding 0.18s ease, box-shadow 0.18s ease;
-}
-
-header.compact {
-    padding-top: 0.55rem;
-    padding-bottom: 0.55rem;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
-}
-
-header.compact h1 {
-    font-size: 1rem;
-}
-
-header.compact .subtitle,
-header.compact .status-panel,
-header.compact .per-page,
-header.compact .pagination,
-header.compact .admin-warning {
-    display: none;
-}
-
-header.compact .filters {
-    margin-top: 0.45rem;
-}
-
-header.compact .filter,
-header.compact .page-link,
-header.compact .per-page a {
-    padding: 0.32rem 0.55rem;
-    font-size: 0.78rem;
-}
-
-@media (max-width: 700px) {
-    header {
-        padding: 0.85rem;
-    }
-
-    h1 {
-        font-size: 1.15rem;
-    }
-
-    .subtitle {
-        font-size: 0.78rem;
-    }
-
-    .filters {
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        padding-bottom: 0.15rem;
-    }
-
-    .pagination {
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        padding-bottom: 0.15rem;
-    }
-
-    .status-panel {
-        gap: 0.35rem;
-        font-size: 0.75rem;
-    }
-
-    .status-item {
-        padding: 0.32rem 0.5rem;
-    }
-
-    .status-toggle {
-        display: inline-flex;
-    }
-
-    header.compact .status-panel {
-        display: none;
-    }
-
-    body.show-status header.compact .status-panel {
-        display: flex;
-    }
-}
+        .status-toggle {
+            display: none;
+            margin-top: 0.45rem;
+            color: var(--text);
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.35rem 0.65rem;
+            font-size: 0.78rem;
+        }
 
         footer {
             padding: 1rem;
@@ -373,12 +436,85 @@ header.compact .per-page a {
             font-size: 0.8rem;
             text-align: center;
         }
+
+        footer a {
+            color: #aaa;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: #fff;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 700px) {
+            header {
+                padding: 0.85rem;
+            }
+
+            h1 {
+                font-size: 1.15rem;
+            }
+
+            .subtitle {
+                font-size: 0.78rem;
+            }
+
+            .hero-intro {
+                font-size: 0.82rem;
+            }
+
+            .filters {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding-bottom: 0.15rem;
+            }
+
+            .pagination {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding-bottom: 0.15rem;
+            }
+
+            .status-panel {
+                gap: 0.35rem;
+                font-size: 0.75rem;
+            }
+
+            .status-item {
+                padding: 0.32rem 0.5rem;
+            }
+
+            .status-toggle {
+                display: inline-flex;
+            }
+
+            header.compact .status-panel {
+                display: none;
+            }
+
+            body.show-status header.compact .status-panel {
+                display: flex;
+            }
+
+            .latest-star-inner {
+                grid-template-columns: 1fr;
+            }
+
+            .latest-star img {
+                height: 240px;
+            }
+
+            .latest-star-title {
+                font-size: 1.15rem;
+            }
+        }
     </style>
 </head>
 <body>
 
 <header id="page-header">
-    <h1>{{ "Birdcam Admin" if admin_mode else "Birdcam Gallery" }}</h1>
+    <h1>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }}</h1>
 
     <div class="subtitle">
         {{ count }} picture{{ "" if count == 1 else "s" }} shown ·
@@ -387,9 +523,20 @@ header.compact .per-page a {
         page {{ page }} / {{ total_pages }}
     </div>
 
+    <div class="hero-intro">
+        A Raspberry Pi watches the feeder, captures movement, and keeps track of the winged visitors.
+        <a href="https://toysfab.com/2026/05/une-camera-automatique-pour-mangeoire-a-oiseaux-avec-un-raspberry-pi/"
+           target="_blank"
+           rel="noopener noreferrer">
+            Read the Toysfab build story
+        </a>.
+    </div>
+
     <div class="filters">
-        <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
         <a class="filter {{ 'active' if mode == 'bird' else '' }}" href="/?filter=bird&per_page={{ per_page }}">Birds</a>
+        <a class="filter {{ 'active' if mode == 'star' else '' }}" href="/?filter=star&per_page={{ per_page }}">Stars</a>
+        <a class="filter {{ 'active' if mode == 'today' else '' }}" href="/?filter=today&per_page={{ per_page }}">Today</a>
+        <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
         <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Motion only</a>
         <a class="filter" href="/stats">Stats</a>
     </div>
@@ -423,9 +570,10 @@ header.compact .per-page a {
         {% endfor %}
     </div>
 
-<button class="status-toggle" onclick="document.body.classList.toggle('show-status')">
-    Status
-</button>
+    {% if admin_mode %}
+    <button class="status-toggle" onclick="document.body.classList.toggle('show-status')">
+        Status
+    </button>
 
     <div class="status-panel">
         <div class="status-item">
@@ -435,6 +583,14 @@ header.compact .per-page a {
 
         <div class="status-item">
             Birds: {{ status.bird_count }}
+        </div>
+
+        <div class="status-item">
+            Stars: {{ status.star_count }}
+        </div>
+
+        <div class="status-item">
+            Today: {{ status.today_count }}
         </div>
 
         <div class="status-item">
@@ -449,19 +605,52 @@ header.compact .per-page a {
             Disk: {{ status.free_gb }} GB free / {{ status.total_gb }} GB · {{ status.used_percent }}% used
         </div>
     </div>
+    {% else %}
+    <div class="public-summary">
+        <span>{{ status.bird_count }} bird pictures</span>
+        <span>·</span>
+        <span>{{ status.star_count }} stars</span>
+        <span>·</span>
+        <span>{{ status.today_count }} today</span>
+        <span>·</span>
+        <span>latest visit: {{ status.latest_date }}</span>
+    </div>
+    {% endif %}
 
     {% if admin_mode %}
     <div class="admin-warning">
-        ADMIN MODE · Delete and retag actions are enabled.
+        ADMIN MODE · Delete, retag and star actions are enabled.
     </div>
     {% endif %}
 </header>
+
+{% if latest_star and page == 1 and mode in ["bird", "star", "today", "all"] %}
+<section class="latest-star">
+    <a href="/image/{{ latest_star.name }}" target="_blank">
+        <div class="latest-star-inner">
+            <img src="/thumb/{{ latest_star.name }}" alt="{{ latest_star.name }}">
+            <div class="latest-star-text">
+                <div class="latest-star-kicker">Latest star</div>
+                <div class="latest-star-title">A favourite visitor from the feeder</div>
+                <div class="latest-star-meta">
+                    {{ latest_star.date }}<br>
+                    {{ latest_star.name }}<br>
+                    Confidence: {{ latest_star.confidence }} · Best: {{ latest_star.best_label }}
+                </div>
+            </div>
+        </div>
+    </a>
+</section>
+{% endif %}
 
 {% if images %}
 <main class="gallery">
     {% for image in images %}
     <div class="card">
         <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
+        {% if image.starred %}
+        <span class="badge star">STAR</span>
+        {% endif %}
 
         <a href="/image/{{ image.name }}" target="_blank">
             <img src="/thumb/{{ image.name }}" loading="lazy" alt="{{ image.name }}">
@@ -496,6 +685,15 @@ header.compact .per-page a {
                         <button type="submit" class="action-button tag-button">Mark Motion</button>
                     </form>
                 </div>
+
+                <form method="post" action="/star/{{ image.name }}">
+                    <input type="hidden" name="filter" value="{{ mode }}">
+                    <input type="hidden" name="page" value="{{ page }}">
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                    <button type="submit" class="action-button star-button">
+                        {{ "Unstar" if image.starred else "Mark Star" }}
+                    </button>
+                </form>
 
                 <form
                     method="post"
@@ -550,6 +748,7 @@ header.compact .per-page a {
 </html>
 """
 
+
 STATS_TEMPLATE = """
 <!doctype html>
 <html lang="en">
@@ -560,31 +759,36 @@ STATS_TEMPLATE = """
 
     <style>
         :root {
-            --bg: #101010;
-            --panel: #1b1b1b;
-            --panel2: #242424;
-            --border: #333;
-            --text: #eee;
-            --muted: #aaa;
-            --bird: #2ecc71;
-            --motion: #f39c12;
+            --bg: #0d1110;
+            --panel: #171d1b;
+            --panel2: #222b27;
+            --border: #34413b;
+            --text: #f2f1e8;
+            --muted: #a9b3ad;
+            --bird: #5fd38d;
+            --motion: #f0b35a;
             --unknown: #777;
+            --toysfab: #ffcf70;
         }
 
         body {
             margin: 0;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: var(--bg);
+            background:
+                radial-gradient(circle at top left, rgba(95, 211, 141, 0.12), transparent 34rem),
+                radial-gradient(circle at top right, rgba(240, 179, 90, 0.10), transparent 30rem),
+                var(--bg);
             color: var(--text);
         }
 
         header {
             padding: 1.2rem;
-            background: var(--panel);
+            background: rgba(23, 29, 27, 0.96);
             border-bottom: 1px solid var(--border);
             position: sticky;
             top: 0;
             z-index: 10;
+            backdrop-filter: blur(8px);
         }
 
         h1 {
@@ -593,14 +797,15 @@ STATS_TEMPLATE = """
         }
 
         h2 {
-            margin: 2rem 0 1rem;
-            font-size: 1.1rem;
+            margin: 2rem 0 0.4rem;
+            font-size: 1.2rem;
         }
 
         .subtitle {
             margin-top: 0.35rem;
             color: var(--muted);
             font-size: 0.9rem;
+            line-height: 1.45;
         }
 
         .tabs {
@@ -621,15 +826,27 @@ STATS_TEMPLATE = """
         }
 
         .tab.active {
-            background: #eee;
+            background: #f4e7c5;
             color: #111;
-            border-color: #eee;
+            border-color: #f4e7c5;
         }
 
         main {
             padding: 1rem;
             max-width: 1100px;
             margin: 0 auto;
+        }
+
+        .editorial-note {
+            background:
+                linear-gradient(135deg, rgba(255, 207, 112, 0.14), rgba(95, 211, 141, 0.08)),
+                var(--panel);
+            border: 1px solid rgba(255, 207, 112, 0.35);
+            border-radius: 14px;
+            padding: 1rem;
+            color: #dce3de;
+            line-height: 1.5;
+            margin-top: 1rem;
         }
 
         .summary {
@@ -660,11 +877,12 @@ STATS_TEMPLATE = """
         .chart {
             display: grid;
             gap: 0.55rem;
+            margin-top: 1rem;
         }
 
         .bar-row {
             display: grid;
-            grid-template-columns: 90px 1fr 70px;
+            grid-template-columns: 90px 1fr 90px;
             gap: 0.75rem;
             align-items: center;
             font-size: 0.85rem;
@@ -746,14 +964,25 @@ STATS_TEMPLATE = """
             font-size: 0.8rem;
             text-align: center;
         }
+
+        @media (max-width: 700px) {
+            .bar-row {
+                grid-template-columns: 64px 1fr;
+            }
+
+            .bar-value {
+                grid-column: 2;
+                text-align: left;
+            }
+        }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>Birdcam Stats</h1>
+    <h1>When do the birds visit?</h1>
     <div class="subtitle">
-        Statistics from captured pictures
+        A small statistical notebook from the feeder. The charts separate confirmed birds from raw motion captures.
     </div>
 
     <div class="tabs">
@@ -763,6 +992,10 @@ STATS_TEMPLATE = """
 </header>
 
 <main>
+    <section class="editorial-note">
+        {{ stats.editorial_summary }}
+    </section>
+
     <section class="summary">
         <div class="summary-card">
             <div class="summary-number">{{ stats.total }}</div>
@@ -775,17 +1008,20 @@ STATS_TEMPLATE = """
         </div>
 
         <div class="summary-card">
-            <div class="summary-number">{{ stats.total_motion }}</div>
-            <div class="summary-label">Motion only</div>
+            <div class="summary-number">{{ stats.total_star }}</div>
+            <div class="summary-label">Starred pictures</div>
         </div>
 
         <div class="summary-card">
-            <div class="summary-number">{{ stats.total_unknown }}</div>
-            <div class="summary-label">Unknown</div>
+            <div class="summary-number">{{ stats.today_bird }}</div>
+            <div class="summary-label">Bird pictures today</div>
         </div>
     </section>
 
-    <h2>Pictures by hour</h2>
+    <h2>Most active hours</h2>
+    <div class="subtitle">
+        This shows when the feeder is most often visited or triggered during the day.
+    </div>
 
     <section class="chart">
         {% for row in stats.hourly_rows %}
@@ -810,7 +1046,10 @@ STATS_TEMPLATE = """
         {% endfor %}
     </section>
 
-    <h2>Pictures by day</h2>
+    <h2>Daily rhythm</h2>
+    <div class="subtitle">
+        A day-by-day view of the feeder activity.
+    </div>
 
     <section class="chart">
         {% for row in stats.daily_rows %}
@@ -845,6 +1084,7 @@ STATS_TEMPLATE = """
             <tr>
                 <th>Day</th>
                 <th>Bird</th>
+                <th>Stars</th>
                 <th>Motion</th>
                 <th>Unknown</th>
                 <th>Total</th>
@@ -855,6 +1095,7 @@ STATS_TEMPLATE = """
             <tr>
                 <td>{{ row.day }}</td>
                 <td>{{ row.bird }}</td>
+                <td>{{ row.star }}</td>
                 <td>{{ row.motion }}</td>
                 <td>{{ row.unknown }}</td>
                 <td>{{ row.total }}</td>
@@ -872,25 +1113,48 @@ STATS_TEMPLATE = """
 </html>
 """
 
+
+def is_starred_filename(name: str) -> bool:
+    return name.startswith("star_")
+
+
+def strip_star_prefix(name: str) -> str:
+    if name.startswith("star_"):
+        return name[len("star_"):]
+    return name
+
+
+def base_kind_from_name(name: str) -> str:
+    clean = strip_star_prefix(name)
+
+    if clean.startswith("bird_"):
+        return "bird"
+
+    if clean.startswith("motion_"):
+        return "motion"
+
+    return "unknown"
+
+
 def parse_image_metadata(path: Path):
     name = path.name
+    starred = is_starred_filename(name)
+    clean_name = strip_star_prefix(name)
+    kind = base_kind_from_name(name)
 
-    if name.startswith("bird_"):
-        kind = "bird"
+    if kind == "bird":
         kind_label = "BIRD"
         kind_class = "bird"
-    elif name.startswith("motion_"):
-        kind = "motion"
+    elif kind == "motion":
         kind_label = "MOTION"
         kind_class = "motion"
     else:
-        kind = "unknown"
         kind_label = "PHOTO"
         kind_class = "motion"
 
-    confidence_match = re.search(r"_conf([0-9.]+)", name)
-    best_match = re.search(r"_best([a-zA-Z0-9_-]+)", name)
-    motion_match = re.search(r"_motion([0-9]+)", name)
+    confidence_match = re.search(r"_conf([0-9.]+)", clean_name)
+    best_match = re.search(r"_best([a-zA-Z0-9_-]+)", clean_name)
+    motion_match = re.search(r"_motion([0-9]+)", clean_name)
 
     confidence = confidence_match.group(1) if confidence_match else "n/a"
     best_label = best_match.group(1) if best_match else "n/a"
@@ -901,13 +1165,16 @@ def parse_image_metadata(path: Path):
 
     return {
         "name": name,
+        "clean_name": clean_name,
         "kind": kind,
         "kind_label": kind_label,
         "kind_class": kind_class,
+        "starred": starred,
         "confidence": confidence,
         "best_label": best_label,
         "motion_score": motion_score,
         "date": modified.strftime("%Y-%m-%d %H:%M:%S"),
+        "day": modified.strftime("%Y-%m-%d"),
         "mtime": stat.st_mtime,
     }
 
@@ -928,8 +1195,16 @@ def get_all_images():
 
 
 def filter_images(images, mode: str):
+    today_key = date.today().strftime("%Y-%m-%d")
+
     if mode == "bird":
         return [image for image in images if image["kind"] == "bird"]
+
+    if mode == "star":
+        return [image for image in images if image["starred"]]
+
+    if mode == "today":
+        return [image for image in images if image["day"] == today_key and image["kind"] == "bird"]
 
     if mode == "motion":
         return [image for image in images if image["kind"] == "motion"]
@@ -991,6 +1266,7 @@ def build_status(all_images):
         latest_date = "n/a"
 
     disk = shutil.disk_usage(CAPTURE_DIR if CAPTURE_DIR.exists() else Path.home())
+    today_key = date.today().strftime("%Y-%m-%d")
 
     free_gb = disk.free / (1024 ** 3)
     total_gb = disk.total / (1024 ** 3)
@@ -1000,6 +1276,8 @@ def build_status(all_images):
         "birdcam_service": service_status("birdcam"),
         "bird_count": sum(1 for image in all_images if image["kind"] == "bird"),
         "motion_count": sum(1 for image in all_images if image["kind"] == "motion"),
+        "star_count": sum(1 for image in all_images if image["starred"]),
+        "today_count": sum(1 for image in all_images if image["day"] == today_key and image["kind"] == "bird"),
         "latest_name": latest_name,
         "latest_date": latest_date,
         "free_gb": f"{free_gb:.1f}",
@@ -1007,18 +1285,17 @@ def build_status(all_images):
         "used_percent": f"{used_percent:.0f}",
     }
 
-def build_stats(all_images):
-    """
-    Build simple daily and hourly statistics from image metadata.
-    Uses file modification time, which is stable enough for the gallery.
-    """
 
+def build_stats(all_images):
     daily = {}
     hourly = {hour: {"bird": 0, "motion": 0, "total": 0} for hour in range(24)}
 
     total_bird = 0
     total_motion = 0
     total_unknown = 0
+    total_star = 0
+    today_bird = 0
+    today_key = date.today().strftime("%Y-%m-%d")
 
     for image in all_images:
         dt = datetime.fromtimestamp(image["mtime"])
@@ -1032,13 +1309,20 @@ def build_stats(all_images):
                 "bird": 0,
                 "motion": 0,
                 "unknown": 0,
+                "star": 0,
                 "total": 0,
             }
+
+        if image["starred"]:
+            daily[day_key]["star"] += 1
+            total_star += 1
 
         if kind == "bird":
             daily[day_key]["bird"] += 1
             hourly[hour_key]["bird"] += 1
             total_bird += 1
+            if day_key == today_key:
+                today_bird += 1
         elif kind == "motion":
             daily[day_key]["motion"] += 1
             hourly[hour_key]["motion"] += 1
@@ -1059,6 +1343,7 @@ def build_stats(all_images):
             "bird": row["bird"],
             "motion": row["motion"],
             "unknown": row["unknown"],
+            "star": row["star"],
             "total": row["total"],
         })
 
@@ -1076,6 +1361,21 @@ def build_stats(all_images):
     max_daily_total = max([row["total"] for row in daily_rows], default=1)
     max_hourly_total = max([row["total"] for row in hourly_rows], default=1)
 
+    best_hour = max(hourly_rows, key=lambda row: row["bird"], default=None)
+    best_day = max(daily_rows, key=lambda row: row["bird"], default=None)
+
+    if best_hour and best_hour["bird"] > 0:
+        hour_sentence = f"The most active bird hour is around {best_hour['hour']} with {best_hour['bird']} bird picture(s)."
+    else:
+        hour_sentence = "No clear bird activity pattern has emerged yet."
+
+    if best_day and best_day["bird"] > 0:
+        day_sentence = f"The strongest bird day so far is {best_day['day']} with {best_day['bird']} bird picture(s)."
+    else:
+        day_sentence = "The daily rhythm is still waiting for more bird visits."
+
+    editorial_summary = f"{hour_sentence} {day_sentence} Today, the feeder has produced {today_bird} bird picture(s)."
+
     return {
         "daily_rows": daily_rows,
         "hourly_rows": hourly_rows,
@@ -1084,7 +1384,10 @@ def build_stats(all_images):
         "total_bird": total_bird,
         "total_motion": total_motion,
         "total_unknown": total_unknown,
+        "total_star": total_star,
+        "today_bird": today_bird,
         "total": total_bird + total_motion + total_unknown,
+        "editorial_summary": editorial_summary,
     }
 
 
@@ -1131,6 +1434,21 @@ def delete_image_and_thumbnail(filename: str):
         image_path.unlink()
 
 
+def make_unique_path(path: Path):
+    if not path.exists():
+        return path
+
+    stem = path.stem
+    suffix = path.suffix
+    counter = 1
+
+    while True:
+        candidate = path.with_name(f"{stem}_{counter}{suffix}")
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
 def retag_image(filename: str, new_tag: str):
     require_admin()
 
@@ -1139,28 +1457,46 @@ def retag_image(filename: str, new_tag: str):
 
     image_path = safe_image_path(filename)
     old_name = image_path.name
+    starred = is_starred_filename(old_name)
 
-    if old_name.startswith("bird_"):
-        rest = old_name[len("bird_"):]
-    elif old_name.startswith("motion_"):
-        rest = old_name[len("motion_"):]
+    clean_name = strip_star_prefix(old_name)
+
+    if clean_name.startswith("bird_"):
+        rest = clean_name[len("bird_"):]
+    elif clean_name.startswith("motion_"):
+        rest = clean_name[len("motion_"):]
     else:
-        rest = old_name
+        rest = clean_name
 
     new_name = f"{new_tag}_{rest}"
-    new_path = CAPTURE_DIR / new_name
 
-    counter = 1
-    while new_path.exists() and new_path.name != old_name:
-        stem = Path(new_name).stem
-        suffix = Path(new_name).suffix
-        new_path = CAPTURE_DIR / f"{stem}_retag{counter}{suffix}"
-        counter += 1
+    if starred:
+        new_name = f"star_{new_name}"
+
+    new_path = make_unique_path(CAPTURE_DIR / new_name)
 
     delete_thumbnail(old_name)
-
     image_path.rename(new_path)
+    delete_thumbnail(new_path.name)
 
+    return new_path.name
+
+
+def toggle_star_image(filename: str):
+    require_admin()
+
+    image_path = safe_image_path(filename)
+    old_name = image_path.name
+
+    if is_starred_filename(old_name):
+        new_name = strip_star_prefix(old_name)
+    else:
+        new_name = f"star_{old_name}"
+
+    new_path = make_unique_path(CAPTURE_DIR / new_name)
+
+    delete_thumbnail(old_name)
+    image_path.rename(new_path)
     delete_thumbnail(new_path.name)
 
     return new_path.name
@@ -1209,22 +1545,31 @@ def parse_int_arg(name: str, default: int, minimum: int, maximum: int):
 
 
 def current_nav_args_from_form():
-    mode = request.form.get("filter", "all")
+    mode = request.form.get("filter", "bird")
     page = request.form.get("page", "1")
     per_page = request.form.get("per_page", str(DEFAULT_PER_PAGE))
 
-    if mode not in {"all", "bird", "motion"}:
-        mode = "all"
+    if mode not in {"all", "bird", "motion", "star", "today"}:
+        mode = "bird"
 
     return mode, page, per_page
 
 
+def latest_star_image(all_images):
+    stars = [image for image in all_images if image["starred"]]
+    if not stars:
+        return None
+    stars.sort(key=lambda image: image["mtime"], reverse=True)
+    return stars[0]
+
+
 @app.route("/")
 def index():
-    mode = request.args.get("filter", "all")
+    # Birds by default.
+    mode = request.args.get("filter", "bird")
 
-    if mode not in {"all", "bird", "motion"}:
-        mode = "all"
+    if mode not in {"all", "bird", "motion", "star", "today"}:
+        mode = "bird"
 
     page = parse_int_arg("page", 1, 1, 100000)
     per_page = parse_int_arg("per_page", DEFAULT_PER_PAGE, 1, MAX_PER_PAGE)
@@ -1236,6 +1581,7 @@ def index():
     page_numbers = make_page_numbers(page, total_pages)
 
     status = build_status(all_images)
+    latest_star = latest_star_image(all_images)
 
     return render_template_string(
         HTML_TEMPLATE,
@@ -1249,6 +1595,7 @@ def index():
         per_page=per_page,
         mode=mode,
         status=status,
+        latest_star=latest_star,
         capture_dir=str(CAPTURE_DIR),
         admin_mode=ADMIN_MODE,
     )
@@ -1309,6 +1656,23 @@ def retag(filename):
         )
     )
 
+
+@app.route("/star/<path:filename>", methods=["POST"])
+def star(filename):
+    mode, page, per_page = current_nav_args_from_form()
+
+    toggle_star_image(filename)
+
+    return redirect(
+        url_for(
+            "index",
+            filter=mode,
+            page=page,
+            per_page=per_page,
+        )
+    )
+
+
 @app.route("/stats")
 def stats_page():
     all_images = get_all_images()
@@ -1319,11 +1683,13 @@ def stats_page():
         stats=stats,
     )
 
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
+    host = os.environ.get("HOST", "0.0.0.0")
 
     app.run(
-        host="0.0.0.0",
+        host=host,
         port=port,
         debug=False,
     )
