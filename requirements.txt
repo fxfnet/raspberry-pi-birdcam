@@ -1,3 +1,4 @@
 opencv-python
 numpy
 Flask
+ai-edge-litert  # TFLite runtime pour la classification d'espèces (optionnel)

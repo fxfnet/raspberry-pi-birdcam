@@ -11,6 +11,16 @@ import sys
 import re
 import os
 
+try:
+    from ai_edge_litert.interpreter import Interpreter as _TFLiteInterpreter
+    _TFLITE_AVAILABLE = True
+except ImportError:
+    try:
+        from tflite_runtime.interpreter import Interpreter as _TFLiteInterpreter
+        _TFLITE_AVAILABLE = True
+    except ImportError:
+        _TFLITE_AVAILABLE = False
+
 
 # ------------------------------------------------------------
 # Paths
@@ -77,6 +87,13 @@ PIXEL_DIFF_THRESHOLD = 30
 BIRD_CONFIDENCE_THRESHOLD = 0.45
 TARGET_LABEL = "bird"
 
+# Google AIY Vision Birds V1 (iNaturalist, 964 espèces) — optionnel.
+# Installer avec : pip install ai-edge-litert
+# Télécharger avec : scripts/install_models.sh
+SPECIES_MODEL_PATH = MODEL_DIR / "aiy_vision_classifier_birds_V1_3.tflite"
+SPECIES_LABELS_PATH = MODEL_DIR / "aiy_birds_V1_labelmap.csv"
+SPECIES_CONFIDENCE_THRESHOLD = 0.10
+
 CLASSES = [
     "background",
     "aeroplane",
@@ -113,6 +130,41 @@ if not PROTOTXT_PATH.exists():
 if not MODEL_PATH.exists():
     print(f"ERROR: model weights not found: {MODEL_PATH}", file=sys.stderr)
     sys.exit(1)
+
+
+# ------------------------------------------------------------
+# Species classifier (TFLite, optionnel)
+# ------------------------------------------------------------
+
+species_interpreter = None
+_input_details = None
+_output_details = None
+bird_labels: dict[int, str] = {}
+
+if not _TFLITE_AVAILABLE:
+    print("Note: TFLite non disponible — installer ai-edge-litert pour la classification d'espèces.")
+elif not SPECIES_MODEL_PATH.exists() or not SPECIES_LABELS_PATH.exists():
+    print(f"Note: modèle espèces absent — lancer scripts/install_models.sh pour l'activer.")
+else:
+    print("Chargement du classifieur d'espèces...")
+    species_interpreter = _TFLiteInterpreter(model_path=str(SPECIES_MODEL_PATH))
+    species_interpreter.allocate_tensors()
+    _input_details = species_interpreter.get_input_details()
+    _output_details = species_interpreter.get_output_details()
+
+    with open(SPECIES_LABELS_PATH) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if not _line or _line.startswith("id"):
+                continue
+            _parts = _line.split(",", 1)
+            if len(_parts) == 2:
+                try:
+                    bird_labels[int(_parts[0])] = _parts[1].strip()
+                except ValueError:
+                    pass
+
+    print(f"Classifieur d'espèces chargé : {len(bird_labels)} espèces.")
 
 
 # ------------------------------------------------------------
@@ -180,13 +232,12 @@ def detect_bird(rgb_frame):
     """
     Detect whether the frame contains a bird.
 
-    Input:
-        rgb_frame: RGB frame from Picamera2
-
     Returns:
         bird_detected: bool
         best_label: str
         best_score: float
+        bird_bbox: np.ndarray | None — [xmin, ymin, xmax, ymax] normalisé [0,1]
+                   du meilleur détection "bird", ou None si aucun oiseau.
     """
 
     bgr_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
@@ -204,6 +255,8 @@ def detect_bird(rgb_frame):
     bird_detected = False
     best_label = "none"
     best_score = 0.0
+    bird_bbox = None
+    best_bird_score = 0.0
 
     for i in range(detections.shape[2]):
         confidence = float(detections[0, 0, i, 2])
@@ -220,8 +273,50 @@ def detect_bird(rgb_frame):
 
         if label == TARGET_LABEL and confidence >= BIRD_CONFIDENCE_THRESHOLD:
             bird_detected = True
+            if confidence > best_bird_score:
+                best_bird_score = confidence
+                bird_bbox = detections[0, 0, i, 3:7].copy()
 
-    return bird_detected, best_label, best_score
+    return bird_detected, best_label, best_score, bird_bbox
+
+
+def classify_species(rgb_frame, bbox):
+    """
+    Recadre l'oiseau et classifie son espèce via le modèle TFLite.
+    Retourne (species_label, confidence) ou (None, 0.0) si non disponible.
+    """
+    if species_interpreter is None or bbox is None:
+        return None, 0.0
+
+    h, w = rgb_frame.shape[:2]
+    pad = 0.08
+    x1 = max(0, int((float(bbox[0]) - pad) * w))
+    y1 = max(0, int((float(bbox[1]) - pad) * h))
+    x2 = min(w, int((float(bbox[2]) + pad) * w))
+    y2 = min(h, int((float(bbox[3]) + pad) * h))
+
+    crop = rgb_frame[y1:y2, x1:x2]
+    if crop.size == 0:
+        return None, 0.0
+
+    resized = cv2.resize(crop, (224, 224))
+    input_data = np.expand_dims(resized, axis=0)
+
+    # Adapte le type selon le modèle (quantisé uint8 ou float32).
+    if _input_details[0]["dtype"] == np.float32:
+        input_data = input_data.astype(np.float32) / 255.0
+
+    species_interpreter.set_tensor(_input_details[0]["index"], input_data)
+    species_interpreter.invoke()
+    output = species_interpreter.get_tensor(_output_details[0]["index"])[0]
+
+    top_idx = int(np.argmax(output))
+    top_score = float(output[top_idx])
+
+    if top_score < SPECIES_CONFIDENCE_THRESHOLD:
+        return None, top_score
+
+    return safe_label(bird_labels.get(top_idx, "unknown")), top_score
 
 
 # ------------------------------------------------------------
@@ -323,28 +418,36 @@ try:
                 # Save immediately before doing AI recognition.
                 save_rgb_jpeg(burst_frame, temp_filename)
 
-                bird_detected, best_label, best_score = detect_bird(burst_frame)
+                bird_detected, best_label, best_score, bird_bbox = detect_bird(burst_frame)
+
+                species_label = None
+                species_conf = 0.0
+                if bird_detected:
+                    species_label, species_conf = classify_species(burst_frame, bird_bbox)
 
                 label_for_filename = safe_label(best_label)
                 confidence_for_filename = f"{best_score:.2f}"
-
                 prefix = "bird" if bird_detected else "motion"
+                sp_suffix = f"_sp{species_label}_spconf{species_conf:.2f}" if species_label else ""
 
                 final_filename = CAPTURE_DIR / (
                     f"{prefix}_{timestamp}"
                     f"_burst{burst_index}"
                     f"_motion{motion_score}"
                     f"_conf{confidence_for_filename}"
-                    f"_best{label_for_filename}.jpg"
+                    f"_best{label_for_filename}"
+                    f"{sp_suffix}.jpg"
                 )
 
                 atomic_rename(temp_filename, final_filename)
 
+                species_str = f" | espèce: {species_label} ({species_conf:.2f})" if species_label else ""
                 print(
                     f"Motion: {motion_score} | "
                     f"burst={burst_index} | "
                     f"AI best: {best_label} ({best_score:.2f}) | "
-                    f"bird={bird_detected} | "
+                    f"bird={bird_detected}"
+                    f"{species_str} | "
                     f"saved={final_filename.name}"
                 )
 

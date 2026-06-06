@@ -661,7 +661,11 @@ HTML_TEMPLATE = """
 
             <div class="details">
                 <div>{{ image.date }}</div>
+                {% if image.species %}
+                <div>Espèce : {{ image.species }} ({{ image.species_conf }})</div>
+                {% else %}
                 <div>Best: {{ image.best_label }}</div>
+                {% endif %}
                 <div>Confidence: {{ image.confidence }}</div>
                 <div>Motion score: {{ image.motion_score }}</div>
             </div>
@@ -1153,12 +1157,16 @@ def parse_image_metadata(path: Path):
         kind_class = "motion"
 
     confidence_match = re.search(r"_conf([0-9.]+)", clean_name)
-    best_match = re.search(r"_best([a-zA-Z0-9_-]+)", clean_name)
+    # Arrête avant _sp pour ne pas capturer le suffixe espèce.
+    best_match = re.search(r"_best([a-zA-Z0-9_-]+?)(?=_sp[a-z]|\.jpg|$)", clean_name)
     motion_match = re.search(r"_motion([0-9]+)", clean_name)
+    species_match = re.search(r"_sp([a-zA-Z0-9_-]+?)_spconf([0-9.]+)", clean_name)
 
     confidence = confidence_match.group(1) if confidence_match else "n/a"
     best_label = best_match.group(1) if best_match else "n/a"
     motion_score = motion_match.group(1) if motion_match else "n/a"
+    species = species_match.group(1).replace("_", " ").title() if species_match else None
+    species_conf = species_match.group(2) if species_match else None
 
     stat = path.stat()
     modified = datetime.fromtimestamp(stat.st_mtime)
@@ -1173,6 +1181,8 @@ def parse_image_metadata(path: Path):
         "confidence": confidence,
         "best_label": best_label,
         "motion_score": motion_score,
+        "species": species,
+        "species_conf": species_conf,
         "date": modified.strftime("%Y-%m-%d %H:%M:%S"),
         "day": modified.strftime("%Y-%m-%d"),
         "mtime": stat.st_mtime,
