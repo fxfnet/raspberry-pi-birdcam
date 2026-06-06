@@ -11,15 +11,6 @@ import sys
 import re
 import os
 
-try:
-    from ai_edge_litert.interpreter import Interpreter as _TFLiteInterpreter
-    _TFLITE_AVAILABLE = True
-except ImportError:
-    try:
-        from tflite_runtime.interpreter import Interpreter as _TFLiteInterpreter
-        _TFLITE_AVAILABLE = True
-    except ImportError:
-        _TFLITE_AVAILABLE = False
 
 
 # ------------------------------------------------------------
@@ -87,10 +78,9 @@ PIXEL_DIFF_THRESHOLD = 30
 BIRD_CONFIDENCE_THRESHOLD = 0.45
 TARGET_LABEL = "bird"
 
-# Google AIY Vision Birds V1 (iNaturalist, 964 espèces) — optionnel.
-# Installer avec : pip install ai-edge-litert
-# Télécharger avec : scripts/install_models.sh
-SPECIES_MODEL_PATH = MODEL_DIR / "aiy_vision_classifier_birds_V1_3.tflite"
+# Google AIY Vision Birds V1 converti en ONNX (iNaturalist, 964 espèces) — optionnel.
+# Télécharger/convertir avec : scripts/install_models.sh
+SPECIES_MODEL_PATH = MODEL_DIR / "aiy_birds_V1.onnx"
 SPECIES_LABELS_PATH = MODEL_DIR / "aiy_birds_V1_labelmap.csv"
 SPECIES_CONFIDENCE_THRESHOLD = 0.10
 
@@ -133,24 +123,17 @@ if not MODEL_PATH.exists():
 
 
 # ------------------------------------------------------------
-# Species classifier (TFLite, optionnel)
+# Species classifier (OpenCV DNN + ONNX, optionnel)
 # ------------------------------------------------------------
 
-species_interpreter = None
-_input_details = None
-_output_details = None
+species_net = None
 bird_labels: dict[int, str] = {}
 
-if not _TFLITE_AVAILABLE:
-    print("Note: TFLite non disponible — installer ai-edge-litert pour la classification d'espèces.")
-elif not SPECIES_MODEL_PATH.exists() or not SPECIES_LABELS_PATH.exists():
-    print(f"Note: modèle espèces absent — lancer scripts/install_models.sh pour l'activer.")
+if not SPECIES_MODEL_PATH.exists() or not SPECIES_LABELS_PATH.exists():
+    print("Note: modèle espèces absent — lancer scripts/install_models.sh pour l'activer.")
 else:
     print("Chargement du classifieur d'espèces...")
-    species_interpreter = _TFLiteInterpreter(model_path=str(SPECIES_MODEL_PATH))
-    species_interpreter.allocate_tensors()
-    _input_details = species_interpreter.get_input_details()
-    _output_details = species_interpreter.get_output_details()
+    species_net = cv2.dnn.readNetFromONNX(str(SPECIES_MODEL_PATH))
 
     with open(SPECIES_LABELS_PATH) as _f:
         for _line in _f:
@@ -282,10 +265,10 @@ def detect_bird(rgb_frame):
 
 def classify_species(rgb_frame, bbox):
     """
-    Recadre l'oiseau et classifie son espèce via le modèle TFLite.
+    Recadre l'oiseau et classifie son espèce via OpenCV DNN (ONNX).
     Retourne (species_label, confidence) ou (None, 0.0) si non disponible.
     """
-    if species_interpreter is None or bbox is None:
+    if species_net is None or bbox is None:
         return None, 0.0
 
     h, w = rgb_frame.shape[:2]
@@ -299,16 +282,17 @@ def classify_species(rgb_frame, bbox):
     if crop.size == 0:
         return None, 0.0
 
-    resized = cv2.resize(crop, (224, 224))
-    input_data = np.expand_dims(resized, axis=0)
-
-    # Adapte le type selon le modèle (quantisé uint8 ou float32).
-    if _input_details[0]["dtype"] == np.float32:
-        input_data = input_data.astype(np.float32) / 255.0
-
-    species_interpreter.set_tensor(_input_details[0]["index"], input_data)
-    species_interpreter.invoke()
-    output = species_interpreter.get_tensor(_output_details[0]["index"])[0]
+    # blobFromImage produit un tensor NCHW float32 normalisé [0, 1].
+    # swapRB=False car le crop est déjà en RGB.
+    blob = cv2.dnn.blobFromImage(
+        crop,
+        scalefactor=1 / 255.0,
+        size=(224, 224),
+        mean=(0, 0, 0),
+        swapRB=False,
+    )
+    species_net.setInput(blob)
+    output = species_net.forward()[0]
 
     top_idx = int(np.argmax(output))
     top_score = float(output[top_idx])
