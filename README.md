@@ -22,9 +22,11 @@ Tested with:
 - Continuous camera capture
 - Motion detection
 - Burst capture after movement
-- Bird recognition using MobileNet SSD via OpenCV DNN
+- Bird detection using MobileNet SSD via OpenCV DNN
+- Optional species identification using Google AIY Vision Birds V1 (964 species, iNaturalist)
 - Filename tagging:
   - `bird_...jpg` when a bird is detected
+  - `bird_..._sp{species}_spconf{score}.jpg` when a species is identified
   - `motion_...jpg` when movement is detected but no bird is recognized
 - Local web gallery
 - Optional systemd autorun
@@ -61,13 +63,22 @@ sudo apt install -y \
   wget
 ```
 
-## Install the AI model
+## Install the AI models
 
 ```bash
 ./scripts/install_models.sh
 ```
 
-This downloads the MobileNet SSD Caffe model used by OpenCV DNN.
+This downloads:
+- the MobileNet SSD Caffe model (bird detection, OpenCV DNN)
+- the Google AIY Vision Birds V1 TFLite model (species identification, 964 species)
+
+Install the TFLite runtime for species identification (optional):
+
+pip install ai-edge-litert
+
+If `ai-edge-litert` is not available for your Python version, try `pip install tflite-runtime`.
+Species identification is disabled gracefully if the package or model files are missing.
 
 ## Run the birdcam manually
 
@@ -131,6 +142,7 @@ Useful parameters:
 ```
 MOTION_THRESHOLD = 1200
 BIRD_CONFIDENCE_THRESHOLD = 0.45
+SPECIES_CONFIDENCE_THRESHOLD = 0.10
 MIN_SECONDS_BETWEEN_SHOTS = 1.0
 BURST_COUNT = 4
 BURST_INTERVAL_SECONDS = 0.25
@@ -163,9 +175,10 @@ BURST_INTERVAL_SECONDS
 
 ## Notes
 
-This project uses OpenCV DNN instead of TensorFlow Lite Python bindings because Debian Trixie with Python 3.13 does not currently provide an easily installable python3-tflite-runtime package.
+Bird detection uses OpenCV DNN (MobileNet SSD) which requires no extra runtime beyond `python3-opencv`.
 
-The detection model recognizes a generic bird class. It does not identify bird species.
+Species identification uses a separate TFLite model and requires `ai-edge-litert` (or `tflite-runtime`).
+These packages may not have pre-built wheels for Python 3.13 on Debian Trixie yet; the feature degrades gracefully if they are unavailable.
 
 On Raspberry Pi OS/Debian, it is better to install via apt:
 
