@@ -23,10 +23,13 @@ wget -O MobileNetSSD_deploy.caffemodel \
 #
 # Le fichier ONNX doit être généré une fois sur une machine de développement :
 #
-#   pip install tflite2onnx
-#   wget "https://storage.googleapis.com/tfhub-lite-models/google/aiy/vision/classifier/birds_V1/3.tflite"
-#   python3 -c "import tflite2onnx; tflite2onnx.convert('3.tflite', 'aiy_birds_V1.onnx')"
-#   scp aiy_birds_V1.onnx fx@oaso.local:~/birdcam/model/
+#   pip install tflite2onnx kaggle
+#   # Télécharger via Kaggle (compte gratuit requis, clé API dans ~/.kaggle/kaggle.json) :
+#   cd /tmp && kaggle models instances versions download google/aiy/tfLite/vision-classifier-birds-v1/3 --untar
+#   # Convertir en ONNX et patcher pour OpenCV DNN :
+#   python3 -c "import tflite2onnx; tflite2onnx.convert('/tmp/3.tflite', '/tmp/aiy_birds_V1.onnx')"
+#   python3 scripts/patch_onnx.py   # corrige la couche Gemm pour OpenCV 4.10
+#   scp /tmp/aiy_birds_V1.onnx <pi>:~/birdcam/model/
 #
 # Le fichier de labels, lui, se télécharge directement :
 echo "Downloading species labels..."

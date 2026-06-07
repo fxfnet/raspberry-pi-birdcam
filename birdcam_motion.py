@@ -82,7 +82,7 @@ TARGET_LABEL = "bird"
 # Télécharger/convertir avec : scripts/install_models.sh
 SPECIES_MODEL_PATH = MODEL_DIR / "aiy_birds_V1.onnx"
 SPECIES_LABELS_PATH = MODEL_DIR / "aiy_birds_V1_labelmap.csv"
-SPECIES_CONFIDENCE_THRESHOLD = 0.10
+SPECIES_CONFIDENCE_THRESHOLD = 0.05
 
 CLASSES = [
     "background",
@@ -282,13 +282,13 @@ def classify_species(rgb_frame, bbox):
     if crop.size == 0:
         return None, 0.0
 
-    # blobFromImage produit un tensor NCHW float32 normalisé [0, 1].
+    # MobileNet Google AIY attend [-1, 1] : (pixel - 127.5) / 127.5.
     # swapRB=False car le crop est déjà en RGB.
     blob = cv2.dnn.blobFromImage(
         crop,
-        scalefactor=1 / 255.0,
+        scalefactor=1 / 127.5,
         size=(224, 224),
-        mean=(0, 0, 0),
+        mean=(127.5, 127.5, 127.5),
         swapRB=False,
     )
     species_net.setInput(blob)
