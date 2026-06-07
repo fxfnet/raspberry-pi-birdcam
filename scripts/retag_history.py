@@ -82,7 +82,14 @@ def main():
     labels = load_labels(SPECIES_LABELS_PATH)
     print(f"{len(labels)} espèces chargées.")
 
-    files = sorted(f for f in capture_dir.glob("bird_*.jpg") if not already_tagged(f.name))
+    thumb_dir = Path.home() / "birdcam" / "gallery" / "thumbs"
+
+    # Traite bird_*.jpg ET star_bird_*.jpg (starred via la galerie admin).
+    patterns = ["bird_*.jpg", "star_bird_*.jpg"]
+    files = sorted(
+        f for pat in patterns for f in capture_dir.glob(pat)
+        if not already_tagged(f.name)
+    )
     print(f"{len(files)} fichiers à traiter (déjà tagués ignorés).\n")
 
     tagged = skipped = errors = 0
@@ -103,15 +110,19 @@ def main():
             continue
 
         sp_suffix = f"_sp{safe_label(species)}_spconf{score:.2f}"
-        stem = path.stem  # retire .jpg
-        new_name = path.parent / (stem + sp_suffix + ".jpg")
+        new_path = path.parent / (path.stem + sp_suffix + ".jpg")
 
         if args.dry_run:
             print(f"  DRY  {path.name}")
-            print(f"    →  {new_name.name}")
+            print(f"    →  {new_path.name}")
         else:
-            path.rename(new_name)
-            print(f"  OK   {new_name.name}  ({species}, {score:.3f})")
+            path.rename(new_path)
+            # Renommer le thumbnail si présent (nom = nom_capture sans /)
+            old_thumb = thumb_dir / path.name.replace("/", "_")
+            new_thumb = thumb_dir / new_path.name.replace("/", "_")
+            if old_thumb.exists():
+                old_thumb.rename(new_thumb)
+            print(f"  OK   {new_path.name}  ({species}, {score:.3f})")
 
         tagged += 1
 
