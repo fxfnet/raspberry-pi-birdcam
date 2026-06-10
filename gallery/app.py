@@ -1091,6 +1091,27 @@ STATS_TEMPLATE = """
         {% endfor %}
     </section>
 
+    {% if stats.top_species %}
+    <h2>Most identified species</h2>
+    <div class="subtitle">
+        Based on AI classification of bird pictures (iNaturalist model).
+    </div>
+
+    <section class="chart">
+        {% for sp, count in stats.top_species %}
+        <div class="bar-row">
+            <div class="bar-label">{{ sp }}</div>
+            <div class="bar-track">
+                <div class="bar-bird"
+                     style="width: {{ (count / stats.max_species_count * 100) | round(1) }}%">
+                </div>
+            </div>
+            <div class="bar-value">{{ count }}</div>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
     <h2>Daily table</h2>
 
     <table>
@@ -1405,6 +1426,14 @@ def build_stats(all_images):
 
     editorial_summary = f"{hour_sentence} {day_sentence} Today, the feeder has produced {today_bird} bird picture(s)."
 
+    species_counts = {}
+    for image in all_images:
+        if image["kind"] == "bird" and image.get("species"):
+            sp = image["species"]
+            species_counts[sp] = species_counts.get(sp, 0) + 1
+    top_species = sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    max_species_count = top_species[0][1] if top_species else 1
+
     return {
         "daily_rows": daily_rows,
         "hourly_rows": hourly_rows,
@@ -1417,6 +1446,8 @@ def build_stats(all_images):
         "today_bird": today_bird,
         "total": total_bird + total_motion + total_unknown,
         "editorial_summary": editorial_summary,
+        "top_species": top_species,
+        "max_species_count": max_species_count,
     }
 
 
