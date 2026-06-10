@@ -597,6 +597,12 @@ HTML_TEMPLATE = """
             Motion: {{ status.motion_count }}
         </div>
 
+        {% if status.top_species %}
+        <div class="status-item">
+            Top : {% for sp, n in status.top_species %}{{ sp }} ({{ n }}){% if not loop.last %} · {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+
         <div class="status-item">
             Latest: {{ status.latest_date }}
         </div>
@@ -614,6 +620,10 @@ HTML_TEMPLATE = """
         <span>{{ status.today_count }} today</span>
         <span>·</span>
         <span>latest visit: {{ status.latest_date }}</span>
+        {% if status.top_species %}
+        <span>·</span>
+        <span>{% for sp, n in status.top_species %}{{ sp }} {{ n }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+        {% endif %}
     </div>
     {% endif %}
 
@@ -1282,6 +1292,14 @@ def build_status(all_images):
     total_gb = disk.total / (1024 ** 3)
     used_percent = (disk.used / disk.total) * 100
 
+    # Top espèces : compter les species uniques sur les photos bird_
+    species_counts = {}
+    for image in all_images:
+        if image["kind"] == "bird" and image.get("species"):
+            sp = image["species"]
+            species_counts[sp] = species_counts.get(sp, 0) + 1
+    top_species = sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
     return {
         "birdcam_service": service_status("birdcam"),
         "bird_count": sum(1 for image in all_images if image["kind"] == "bird"),
@@ -1293,6 +1311,7 @@ def build_status(all_images):
         "free_gb": f"{free_gb:.1f}",
         "total_gb": f"{total_gb:.1f}",
         "used_percent": f"{used_percent:.0f}",
+        "top_species": top_species,
     }
 
 
