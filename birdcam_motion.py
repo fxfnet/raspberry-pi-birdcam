@@ -316,10 +316,10 @@ camera_config = picam2.create_video_configuration(
     },
     controls={
         "FrameRate": 20,
-        "ExposureTime": 3000,
-        "AnalogueGain": 4.0,
+        # ExposureTime et AnalogueGain laissés en auto-exposition (AEC/AGC)
+        # pour gérer la lumière variable en extérieur.
+        # Décommenter pour forcer : "ExposureTime": 3000, "AnalogueGain": 2.0
     }
-
 )
 
 
@@ -383,57 +383,64 @@ try:
             except IndexError:
                 first_frame = frame_buffer[-1].copy()
 
-            burst_frames = [first_frame]
-
-            # Capture additional frames after the trigger.
+            # Capturer les frames ET leurs timestamps en même temps.
+            captures = [(datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3], first_frame)]
             for _ in range(BURST_COUNT - 1):
                 time.sleep(BURST_INTERVAL_SECONDS)
-                burst_frames.append(picam2.capture_array().copy())
+                captures.append((
+                    datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3],
+                    picam2.capture_array().copy(),
+                ))
 
-            for burst_index, burst_frame in enumerate(burst_frames):
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-
+            # Sauvegarder immédiatement toutes les frames.
+            temp_files = []
+            for burst_index, (timestamp, burst_frame) in enumerate(captures):
                 temp_filename = CAPTURE_DIR / (
-                    f"pending_{timestamp}"
-                    f"_burst{burst_index}"
-                    f"_motion{motion_score}.jpg"
+                    f"pending_{timestamp}_burst{burst_index}_motion{motion_score}.jpg"
                 )
-
-                # Save immediately before doing AI recognition.
                 save_rgb_jpeg(burst_frame, temp_filename)
+                temp_files.append((burst_index, timestamp, burst_frame, temp_filename))
 
-                bird_detected, best_label, best_score, bird_bbox = detect_bird(burst_frame)
+            # Détection oiseau sur chaque frame (MobileNetSSD, rapide).
+            detections = []
+            for burst_index, timestamp, burst_frame, temp_filename in temp_files:
+                bd, bl, bs, bbox = detect_bird(burst_frame)
+                detections.append((burst_index, timestamp, burst_frame, temp_filename, bd, bl, bs, bbox))
 
-                species_label = None
-                species_conf = 0.0
-                if bird_detected:
-                    species_label, species_conf = classify_species(burst_frame, bird_bbox)
+            # Classify species une seule fois sur la meilleure frame oiseau.
+            best = max(
+                (d for d in detections if d[4]),  # bird_detected == True
+                key=lambda d: d[6],               # best_score
+                default=None,
+            )
+            species_label = species_conf = None
+            if best is not None:
+                species_label, species_conf = classify_species(best[2], best[7])
 
-                label_for_filename = safe_label(best_label)
-                confidence_for_filename = f"{best_score:.2f}"
-                prefix = "bird" if bird_detected else "motion"
-                sp_suffix = f"_sp{species_label}_spconf{species_conf:.2f}" if species_label else ""
+            sp_suffix = f"_sp{species_label}_spconf{species_conf:.2f}" if species_label else ""
 
+            # Renommer avec le résultat final.
+            for burst_index, timestamp, _, temp_filename, bd, bl, bs, _ in detections:
+                label_for_filename = safe_label(bl)
+                prefix = "bird" if bd else "motion"
                 final_filename = CAPTURE_DIR / (
                     f"{prefix}_{timestamp}"
                     f"_burst{burst_index}"
                     f"_motion{motion_score}"
-                    f"_conf{confidence_for_filename}"
+                    f"_conf{bs:.2f}"
                     f"_best{label_for_filename}"
                     f"{sp_suffix}.jpg"
                 )
-
                 atomic_rename(temp_filename, final_filename)
 
-                species_str = f" | espèce: {species_label} ({species_conf:.2f})" if species_label else ""
-                print(
-                    f"Motion: {motion_score} | "
-                    f"burst={burst_index} | "
-                    f"AI best: {best_label} ({best_score:.2f}) | "
-                    f"bird={bird_detected}"
-                    f"{species_str} | "
-                    f"saved={final_filename.name}"
-                )
+            bird_any = any(d[4] for d in detections)
+            species_str = f" | espèce: {species_label} ({species_conf:.2f})" if species_label else ""
+            print(
+                f"Motion: {motion_score} | "
+                f"burst=0-{BURST_COUNT-1} | "
+                f"bird={bird_any}"
+                f"{species_str}"
+            )
 
             last_capture_time = time.time()
             previous_gray = None
