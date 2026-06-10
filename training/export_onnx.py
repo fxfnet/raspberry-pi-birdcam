@@ -28,6 +28,12 @@ _STD  = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 
 
 class NormalizedModel(nn.Module):
+    """
+    Wrapper qui intègre normalisation ImageNet + softmax.
+    Entrée attendue : [0, 255] float32 NCHW
+      (cv2.dnn.blobFromImage avec scalefactor=1.0)
+    Sortie : probabilités [0, 1] pour chaque classe.
+    """
     def __init__(self, backbone):
         super().__init__()
         self.backbone = backbone
@@ -35,9 +41,9 @@ class NormalizedModel(nn.Module):
         self.register_buffer("std",  _STD)
 
     def forward(self, x):
-        x = x / 255.0
-        x = (x - self.mean) / self.std
-        return self.backbone(x)
+        x = x / 255.0                    # [0,255] → [0,1]
+        x = (x - self.mean) / self.std   # normalisation ImageNet
+        return torch.softmax(self.backbone(x), dim=1)
 
 
 def export(model_path: str, out_path: str):

@@ -301,17 +301,19 @@ def classify_species(rgb_frame, bbox):
     if crop.size == 0:
         return None, 0.0
 
-    # garden_birds intègre la normalisation ImageNet — accepte [0, 255] / 255.
-    # aiy_birds_V1 (fallback) était entraîné sur uint8 [0, 255], même scale.
+    # scalefactor=1.0 : le modèle reçoit [0,255] et normalise en interne.
     blob = cv2.dnn.blobFromImage(
         crop,
-        scalefactor=1 / 255.0,
+        scalefactor=1.0,
         size=(224, 224),
         mean=(0, 0, 0),
         swapRB=False,
     )
     species_net.setInput(blob)
-    output = species_net.forward()[0]
+    raw = species_net.forward()[0]
+    # Softmax : garden_birds émet des logits bruts.
+    exp_raw = np.exp(raw - raw.max())
+    output = exp_raw / exp_raw.sum()
 
     # Parcourir le top-10 et retourner la première espèce présente à Paris.
     top_indices = np.argsort(output)[::-1][:10]

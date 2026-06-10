@@ -67,16 +67,23 @@ def load_labels(path):
     return labels
 
 
+def softmax(x):
+    e = np.exp(x - x.max())
+    return e / e.sum()
+
+
 def classify(net, labels, image_rgb):
+    # scalefactor=1.0 : le modèle reçoit [0,255] et divise lui-même par 255.
     blob = cv2.dnn.blobFromImage(
         image_rgb,
-        scalefactor=1 / 255.0,
+        scalefactor=1.0,
         size=(224, 224),
         mean=(0, 0, 0),
         swapRB=False,
     )
     net.setInput(blob)
-    output = net.forward()[0]
+    # Appliquer softmax : garden_birds émet des logits bruts (pas de softmax dans l'archi).
+    output = softmax(net.forward()[0])
 
     top_indices = np.argsort(output)[::-1][:TOP_K]
     for idx in top_indices:
