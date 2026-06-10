@@ -826,13 +826,16 @@ HTML_TEMPLATE = """
 
 <script>
     const header = document.getElementById("page-header");
+    let isCompact = false;
 
     function updateHeaderCompactMode() {
         if (!header) return;
-
-        if (window.scrollY > 80) {
+        const y = window.scrollY;
+        if (!isCompact && y > 80) {
+            isCompact = true;
             header.classList.add("compact");
-        } else {
+        } else if (isCompact && y < 50) {
+            isCompact = false;
             header.classList.remove("compact");
             document.body.classList.remove("show-status");
         }
