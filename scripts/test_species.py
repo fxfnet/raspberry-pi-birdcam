@@ -10,6 +10,7 @@ Usage :
 
 import sys
 import argparse
+import json
 import numpy as np
 import cv2
 from pathlib import Path
@@ -18,6 +19,14 @@ BASE_DIR = Path.home() / "birdcam"
 MODEL_DIR = BASE_DIR / "model"
 SPECIES_MODEL_PATH = MODEL_DIR / "aiy_birds_V1.onnx"
 SPECIES_LABELS_PATH = MODEL_DIR / "aiy_birds_V1_labelmap.csv"
+SPECIES_THRESHOLD = 0.05
+TOP_K = 10
+
+_SPECIES_JSON = Path(__file__).parent.parent / "training" / "species.json"
+PARIS_SPECIES: set[str] = set()
+if _SPECIES_JSON.exists():
+    for _sp in json.loads(_SPECIES_JSON.read_text()):
+        PARIS_SPECIES.add(_sp["scientific"].lower())
 
 
 def load_labels(path):
@@ -76,21 +85,36 @@ def main():
     # 4. Inférence
     blob = cv2.dnn.blobFromImage(
         image_rgb,
-        scalefactor=1 / 255.0,
+        scalefactor=1 / 127.5,
         size=(224, 224),
-        mean=(0, 0, 0),
+        mean=(127.5, 127.5, 127.5),
         swapRB=False,
     )
     net.setInput(blob)
     output = net.forward()[0]
 
-    top5 = np.argsort(output)[::-1][:5]
-    print("\nTop 5 prédictions :")
-    for rank, idx in enumerate(top5, 1):
+    top_all = np.argsort(output)[::-1][:TOP_K]
+    print(f"\nTop {TOP_K} brut (toutes espèces) :")
+    for rank, idx in enumerate(top_all, 1):
         score = float(output[idx])
-        name = labels.get(idx, f"idx_{idx}")
+        name = labels.get(int(idx), f"idx_{idx}")
         bar = "█" * int(score * 40)
-        print(f"  {rank}. {name:<40s}  {score:.4f}  {bar}")
+        paris = "✓" if name.lower() in PARIS_SPECIES else " "
+        print(f"  {paris} {rank:2d}. {name:<40s}  {score:.4f}  {bar}")
+
+    print(f"\nFiltre Paris ({len(PARIS_SPECIES)} espèces) :")
+    found = False
+    for idx in top_all:
+        score = float(output[idx])
+        if score < SPECIES_THRESHOLD:
+            break
+        name = labels.get(int(idx), "unknown")
+        if not PARIS_SPECIES or name.lower() in PARIS_SPECIES:
+            print(f"  → {name}  ({score:.4f})")
+            found = True
+            break
+    if not found:
+        print("  → aucune espèce parisienne détectée au-dessus du seuil")
 
     print("\n✓ Test terminé avec succès.")
 

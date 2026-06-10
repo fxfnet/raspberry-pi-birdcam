@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from collections import deque
 import cv2
+import json
 import time
 import sys
 import re
@@ -25,6 +26,15 @@ PROTOTXT_PATH = MODEL_DIR / "MobileNetSSD_deploy.prototxt"
 MODEL_PATH = MODEL_DIR / "MobileNetSSD_deploy.caffemodel"
 
 CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Espèces présentes à Paris : allowlist chargée depuis training/species.json.
+# Le classifieur ne retourne une espèce que si elle figure dans cette liste.
+_SPECIES_JSON = Path(__file__).parent / "training" / "species.json"
+PARIS_SPECIES: set[str] = set()
+if _SPECIES_JSON.exists():
+    for _sp in json.loads(_SPECIES_JSON.read_text()):
+        PARIS_SPECIES.add(_sp["scientific"].lower())
+    print(f"Filtre Paris : {len(PARIS_SPECIES)} espèces autorisées.")
 
 
 # ------------------------------------------------------------
@@ -294,13 +304,17 @@ def classify_species(rgb_frame, bbox):
     species_net.setInput(blob)
     output = species_net.forward()[0]
 
-    top_idx = int(np.argmax(output))
-    top_score = float(output[top_idx])
+    # Parcourir le top-10 et retourner la première espèce présente à Paris.
+    top_indices = np.argsort(output)[::-1][:10]
+    for idx in top_indices:
+        score = float(output[idx])
+        if score < SPECIES_CONFIDENCE_THRESHOLD:
+            break
+        name = bird_labels.get(int(idx), "unknown")
+        if not PARIS_SPECIES or name.lower() in PARIS_SPECIES:
+            return safe_label(name), score
 
-    if top_score < SPECIES_CONFIDENCE_THRESHOLD:
-        return None, top_score
-
-    return safe_label(bird_labels.get(top_idx, "unknown")), top_score
+    return None, float(output[top_indices[0]])
 
 
 # ------------------------------------------------------------
