@@ -88,10 +88,19 @@ PIXEL_DIFF_THRESHOLD = 30
 BIRD_CONFIDENCE_THRESHOLD = 0.45
 TARGET_LABEL = "bird"
 
-# Google AIY Vision Birds V1 converti en ONNX (iNaturalist, 964 espèces) — optionnel.
-# Télécharger/convertir avec : scripts/install_models.sh
-SPECIES_MODEL_PATH = MODEL_DIR / "aiy_birds_V1.onnx"
-SPECIES_LABELS_PATH = MODEL_DIR / "aiy_birds_V1_labelmap.csv"
+# Modèle espèces : garden_birds (32 espèces Paris, custom) en priorité,
+# sinon fallback sur aiy_birds_V1 (964 espèces iNaturalist générique).
+_GARDEN = MODEL_DIR / "garden_birds.onnx"
+_GARDEN_LABELS = MODEL_DIR / "garden_birds_labels.csv"
+_AIY = MODEL_DIR / "aiy_birds_V1.onnx"
+_AIY_LABELS = MODEL_DIR / "aiy_birds_V1_labelmap.csv"
+
+if _GARDEN.exists() and _GARDEN_LABELS.exists():
+    SPECIES_MODEL_PATH  = _GARDEN
+    SPECIES_LABELS_PATH = _GARDEN_LABELS
+else:
+    SPECIES_MODEL_PATH  = _AIY
+    SPECIES_LABELS_PATH = _AIY_LABELS
 SPECIES_CONFIDENCE_THRESHOLD = 0.05
 
 CLASSES = [
@@ -292,13 +301,13 @@ def classify_species(rgb_frame, bbox):
     if crop.size == 0:
         return None, 0.0
 
-    # MobileNet Google AIY attend [-1, 1] : (pixel - 127.5) / 127.5.
-    # swapRB=False car le crop est déjà en RGB.
+    # garden_birds intègre la normalisation ImageNet — accepte [0, 255] / 255.
+    # aiy_birds_V1 (fallback) était entraîné sur uint8 [0, 255], même scale.
     blob = cv2.dnn.blobFromImage(
         crop,
-        scalefactor=1 / 127.5,
+        scalefactor=1 / 255.0,
         size=(224, 224),
-        mean=(127.5, 127.5, 127.5),
+        mean=(0, 0, 0),
         swapRB=False,
     )
     species_net.setInput(blob)

@@ -14,28 +14,49 @@ import json
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 import timm
 
 
 IMG_SIZE = 224
 
+# Normalisation ImageNet intégrée dans le modèle.
+# Le modèle accepte ainsi des valeurs brutes [0, 255] float32 (NCHW),
+# ce qui est compatible avec cv2.dnn.blobFromImage(scalefactor=1/255).
+_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+_STD  = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+
+
+class NormalizedModel(nn.Module):
+    def __init__(self, backbone):
+        super().__init__()
+        self.backbone = backbone
+        self.register_buffer("mean", _MEAN)
+        self.register_buffer("std",  _STD)
+
+    def forward(self, x):
+        x = x / 255.0
+        x = (x - self.mean) / self.std
+        return self.backbone(x)
+
 
 def export(model_path: str, out_path: str):
-    ckpt   = torch.load(model_path, map_location="cpu")
+    ckpt   = torch.load(model_path, map_location="cpu", weights_only=False)
     classes = ckpt["classes"]
     n_cls  = len(classes)
 
-    model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=n_cls)
-    model.load_state_dict(ckpt["model"])
+    backbone = timm.create_model("efficientnet_b0", pretrained=False, num_classes=n_cls)
+    backbone.load_state_dict(ckpt["model"])
+    model = NormalizedModel(backbone)
     model.eval()
 
-    dummy = torch.zeros(1, 3, IMG_SIZE, IMG_SIZE)
+    dummy = torch.zeros(1, 3, IMG_SIZE, IMG_SIZE)  # [0, 255] float32
 
     torch.onnx.export(
         model,
         dummy,
         out_path,
-        opset_version=12,           # opset 12 = bien supporté par cv2.dnn 4.x
+        opset_version=12,
         input_names=["input"],
         output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
