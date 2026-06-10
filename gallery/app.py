@@ -523,6 +523,57 @@ HTML_TEMPLATE = """
                 font-size: 1.15rem;
             }
         }
+
+        .species-section {
+            padding: 1.5rem;
+            max-width: 640px;
+        }
+
+        .species-section h2 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin: 0 0 1rem 0;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .bar-row--species {
+            display: block;
+            margin-bottom: 0.75rem;
+        }
+
+        .bar-row--species .bar-label {
+            font-size: 0.85rem;
+            color: #ddd;
+            margin-bottom: 0.3rem;
+        }
+
+        .bar-species-line {
+            display: grid;
+            grid-template-columns: 1fr 48px;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .bar-track {
+            height: 18px;
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .bar-bird-fill {
+            background: var(--bird);
+            height: 100%;
+        }
+
+        .bar-count {
+            font-size: 0.82rem;
+            color: var(--muted);
+            text-align: right;
+        }
     </style>
 </head>
 <body>
@@ -742,6 +793,25 @@ HTML_TEMPLATE = """
 {% else %}
 <div class="empty">
     No pictures found for this filter in {{ capture_dir }}.
+</div>
+{% endif %}
+
+{% if admin_mode and status.top_species %}
+<div class="species-section">
+    <h2>Espèces les plus fréquentes</h2>
+    {% for sp in status.top_species %}
+    <div class="bar-row--species">
+        <div class="bar-label">
+            {{ sp.name }}{% if sp.french %} <span style="opacity:.65">({{ sp.french }})</span>{% endif %}
+        </div>
+        <div class="bar-species-line">
+            <div class="bar-track">
+                <div class="bar-bird-fill" style="width: {{ (sp.count / status.top_species[0].count * 100) | round(1) }}%"></div>
+            </div>
+            <div class="bar-count">{{ sp.count }}</div>
+        </div>
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 
@@ -993,6 +1063,30 @@ STATS_TEMPLATE = """
             text-align: center;
         }
 
+        .bar-row--species {
+            display: block;
+            margin-bottom: 0.75rem;
+        }
+
+        .bar-row--species .bar-label {
+            white-space: normal;
+            margin-bottom: 0.3rem;
+            font-size: 0.85rem;
+            color: #ddd;
+        }
+
+        .bar-row--species .bar-species-line {
+            display: grid;
+            grid-template-columns: 1fr 48px;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .bar-row--species .bar-value {
+            text-align: right;
+            font-size: 0.85rem;
+        }
+
         @media (max-width: 700px) {
             .bar-row {
                 grid-template-columns: 64px 1fr;
@@ -1113,14 +1207,16 @@ STATS_TEMPLATE = """
 
     <section class="chart">
         {% for sp in stats.top_species %}
-        <div class="bar-row">
-            <div class="bar-label">{{ sp.name }}{% if sp.french %} <span style="opacity:.65;font-size:.85em">({{ sp.french }})</span>{% endif %}</div>
-            <div class="bar-track">
-                <div class="bar-bird"
-                     style="width: {{ (sp.count / stats.max_species_count * 100) | round(1) }}%">
-                </div>
+        <div class="bar-row--species">
+            <div class="bar-label">
+                {{ sp.name }}{% if sp.french %} <span style="opacity:.65">({{ sp.french }})</span>{% endif %}
             </div>
-            <div class="bar-value">{{ sp.count }}</div>
+            <div class="bar-species-line">
+                <div class="bar-track">
+                    <div class="bar-bird" style="width: {{ (sp.count / stats.max_species_count * 100) | round(1) }}%"></div>
+                </div>
+                <div class="bar-value">{{ sp.count }}</div>
+            </div>
         </div>
         {% endfor %}
     </section>
