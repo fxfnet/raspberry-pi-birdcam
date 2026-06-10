@@ -7,6 +7,7 @@ import subprocess
 import shutil
 import math
 import re
+import json
 import cv2
 import os
 
@@ -29,6 +30,19 @@ THUMB_JPEG_QUALITY = 80
 ADMIN_MODE = os.environ.get("BIRDCAM_ADMIN", "0") == "1"
 
 THUMB_DIR.mkdir(parents=True, exist_ok=True)
+
+# Noms français : chargés depuis training/species.json si présent.
+# Clé = nom scientifique en minuscules (ex. "parus major"), valeur = nom français.
+_SPECIES_JSON = Path(__file__).parent.parent / "training" / "species.json"
+FRENCH_NAMES: dict[str, str] = {}
+if _SPECIES_JSON.exists():
+    for _sp in json.loads(_SPECIES_JSON.read_text()):
+        FRENCH_NAMES[_sp["scientific"].lower()] = _sp["french"]
+
+
+def french_name(display_name: str) -> str:
+    """Retourne le nom français pour un nom affiché type 'Parus Major', ou '' si inconnu."""
+    return FRENCH_NAMES.get(display_name.lower(), "")
 
 
 HTML_TEMPLATE = """
@@ -599,7 +613,7 @@ HTML_TEMPLATE = """
 
         {% if status.top_species %}
         <div class="status-item">
-            Top : {% for sp, n in status.top_species %}{{ sp }} ({{ n }}){% if not loop.last %} · {% endif %}{% endfor %}
+            Top : {% for sp in status.top_species %}{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %} {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}
         </div>
         {% endif %}
 
@@ -622,7 +636,7 @@ HTML_TEMPLATE = """
         <span>latest visit: {{ status.latest_date }}</span>
         {% if status.top_species %}
         <span>·</span>
-        <span>{% for sp, n in status.top_species %}{{ sp }} {{ n }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+        <span>{% for sp in status.top_species %}{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %} {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
         {% endif %}
     </div>
     {% endif %}
@@ -1098,15 +1112,15 @@ STATS_TEMPLATE = """
     </div>
 
     <section class="chart">
-        {% for sp, count in stats.top_species %}
+        {% for sp in stats.top_species %}
         <div class="bar-row">
-            <div class="bar-label">{{ sp }}</div>
+            <div class="bar-label">{{ sp.name }}{% if sp.french %} <span style="opacity:.65;font-size:.85em">({{ sp.french }})</span>{% endif %}</div>
             <div class="bar-track">
                 <div class="bar-bird"
-                     style="width: {{ (count / stats.max_species_count * 100) | round(1) }}%">
+                     style="width: {{ (sp.count / stats.max_species_count * 100) | round(1) }}%">
                 </div>
             </div>
-            <div class="bar-value">{{ count }}</div>
+            <div class="bar-value">{{ sp.count }}</div>
         </div>
         {% endfor %}
     </section>
@@ -1319,7 +1333,10 @@ def build_status(all_images):
         if image["kind"] == "bird" and image.get("species"):
             sp = image["species"]
             species_counts[sp] = species_counts.get(sp, 0) + 1
-    top_species = sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_species = [
+        {"name": sp, "count": n, "french": french_name(sp)}
+        for sp, n in sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    ]
 
     return {
         "birdcam_service": service_status("birdcam"),
@@ -1431,8 +1448,11 @@ def build_stats(all_images):
         if image["kind"] == "bird" and image.get("species"):
             sp = image["species"]
             species_counts[sp] = species_counts.get(sp, 0) + 1
-    top_species = sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-    max_species_count = top_species[0][1] if top_species else 1
+    top_species = [
+        {"name": sp, "count": n, "french": french_name(sp)}
+        for sp, n in sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    ]
+    max_species_count = top_species[0]["count"] if top_species else 1
 
     return {
         "daily_rows": daily_rows,
