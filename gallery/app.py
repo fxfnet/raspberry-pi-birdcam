@@ -502,25 +502,51 @@ HTML_TEMPLATE = """
 
         .bulk-bar {
             position: fixed;
-            bottom: 0; left: 0; right: 0;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
             background: rgba(23, 29, 27, 0.97);
-            border-top: 1px solid var(--border);
-            padding: 0.65rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.45rem 0.75rem;
             display: flex;
             align-items: center;
-            gap: 0.6rem;
+            gap: 0.5rem;
             flex-wrap: wrap;
+            justify-content: center;
             z-index: 200;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+            max-width: 90vw;
         }
 
         .bulk-count {
-            font-size: 0.88rem;
+            font-size: 0.8rem;
             font-weight: 700;
             color: var(--bird);
             white-space: nowrap;
-            margin-right: 0.4rem;
         }
+
+        .bulk-btns {
+            display: flex;
+            gap: 0.3rem;
+            flex-wrap: wrap;
+        }
+
+        .bk-btn {
+            border-radius: 999px;
+            padding: 0.28rem 0.65rem;
+            font-size: 0.78rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            color: #eee;
+        }
+
+        .bk-tag     { background: #1f3140; border-color: #375f80; }
+        .bk-star    { background: #3f351b; border-color: #8d722d; }
+        .bk-species { background: #1f2e1f; border-color: #3d5c3d; }
+        .bk-del     { background: #3a1f1f; border-color: #703030; }
+        .bk-cancel  { background: #1a1a1a; border-color: #444; }
 
         .empty {
             padding: 2rem;
@@ -798,56 +824,6 @@ HTML_TEMPLATE = """
                 <div>Motion score: {{ image.motion_score }}</div>
             </div>
 
-            {% if admin_mode %}
-            <div class="admin-actions">
-                <div class="button-row">
-                    <form method="post" action="/retag/{{ image.name }}">
-                        <input type="hidden" name="new_tag" value="bird">
-                        <input type="hidden" name="filter" value="{{ mode }}">
-                        <input type="hidden" name="page" value="{{ page }}">
-                        <input type="hidden" name="per_page" value="{{ per_page }}">
-                        <button type="submit" class="action-button tag-button">Mark Bird</button>
-                    </form>
-
-                    <form method="post" action="/retag/{{ image.name }}">
-                        <input type="hidden" name="new_tag" value="motion">
-                        <input type="hidden" name="filter" value="{{ mode }}">
-                        <input type="hidden" name="page" value="{{ page }}">
-                        <input type="hidden" name="per_page" value="{{ per_page }}">
-                        <button type="submit" class="action-button tag-button">Mark Motion</button>
-                    </form>
-                </div>
-
-                <form method="post" action="/star/{{ image.name }}">
-                    <input type="hidden" name="filter" value="{{ mode }}">
-                    <input type="hidden" name="page" value="{{ page }}">
-                    <input type="hidden" name="per_page" value="{{ per_page }}">
-                    <button type="submit" class="action-button star-button">
-                        {{ "Unstar" if image.starred else "Mark Star" }}
-                    </button>
-                </form>
-
-                {% if image.species %}
-                <form method="post" action="/clear_species/{{ image.name }}">
-                    <input type="hidden" name="filter" value="{{ mode }}">
-                    <input type="hidden" name="page" value="{{ page }}">
-                    <input type="hidden" name="per_page" value="{{ per_page }}">
-                    <button type="submit" class="action-button species-err-button">Erreur espèce</button>
-                </form>
-                {% endif %}
-
-                <form
-                    method="post"
-                    action="/delete/{{ image.name }}"
-                    onsubmit="return confirm('Delete this picture?');"
-                >
-                    <input type="hidden" name="filter" value="{{ mode }}">
-                    <input type="hidden" name="page" value="{{ page }}">
-                    <input type="hidden" name="per_page" value="{{ per_page }}">
-                    <button type="submit" class="action-button delete-button">Delete</button>
-                </form>
-            </div>
-            {% endif %}
         </div>
     </div>
     {% endfor %}
@@ -911,12 +887,14 @@ HTML_TEMPLATE = """
 {% if admin_mode %}
 <div id="bulk-bar" class="bulk-bar" hidden>
     <span class="bulk-count" id="bulk-count"></span>
-    <button type="button" class="action-button tag-button"          onclick="bulkSubmit('bird')">Oiseau</button>
-    <button type="button" class="action-button tag-button"          onclick="bulkSubmit('motion')">Motion</button>
-    <button type="button" class="action-button star-button"         onclick="bulkSubmit('star')">Étoile</button>
-    <button type="button" class="action-button species-err-button"  onclick="bulkSubmit('clear_species')">Erreur espèce</button>
-    <button type="button" class="action-button delete-button"       onclick="bulkSubmit('delete')">Supprimer</button>
-    <button type="button" class="action-button" style="background:#222;border:1px solid #444" onclick="clearSelection()">Annuler</button>
+    <div class="bulk-btns">
+        <button type="button" class="bk-btn bk-tag"     onclick="bulkSubmit('bird')">Bird</button>
+        <button type="button" class="bk-btn bk-tag"     onclick="bulkSubmit('motion')">Motion</button>
+        <button type="button" class="bk-btn bk-star"    onclick="bulkSubmit('star')">Star</button>
+        <button type="button" class="bk-btn bk-species" onclick="bulkSubmit('clear_species')">Clear species</button>
+        <button type="button" class="bk-btn bk-del"     onclick="bulkSubmit('delete')">Delete</button>
+        <button type="button" class="bk-btn bk-cancel"  onclick="clearSelection()">Cancel</button>
+    </div>
     <form id="bulk-form" method="post" action="/bulk_action" style="display:none">
         <input type="hidden" name="filter" value="{{ mode }}">
         <input type="hidden" name="page" value="{{ page }}">
