@@ -428,6 +428,56 @@ HTML_TEMPLATE = """
             background: #5a2a2a;
         }
 
+        .species-err-button {
+            background: #1f2e1f;
+            border: 1px solid #3d5c3d;
+        }
+
+        .species-err-button:hover {
+            background: #2a3f2a;
+        }
+
+        .card-cb-wrap {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            z-index: 3;
+        }
+
+        .card-cb-wrap input[type="checkbox"] {
+            width: 1.25rem;
+            height: 1.25rem;
+            cursor: pointer;
+            accent-color: var(--bird);
+        }
+
+        .card.selected {
+            outline: 2px solid var(--bird);
+            outline-offset: -1px;
+        }
+
+        .bulk-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: rgba(23, 29, 27, 0.97);
+            border-top: 1px solid var(--border);
+            padding: 0.65rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            z-index: 200;
+            backdrop-filter: blur(10px);
+        }
+
+        .bulk-count {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: var(--bird);
+            white-space: nowrap;
+            margin-right: 0.4rem;
+        }
+
         .empty {
             padding: 2rem;
             color: #aaa;
@@ -721,10 +771,16 @@ HTML_TEMPLATE = """
 {% if images %}
 <main class="gallery">
     {% for image in images %}
-    <div class="card">
+    <div class="card" id="card-{{ loop.index }}">
         <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
         {% if image.starred %}
         <span class="badge star">STAR</span>
+        {% endif %}
+
+        {% if admin_mode %}
+        <label class="card-cb-wrap" onclick="event.stopPropagation()">
+            <input type="checkbox" class="bulk-cb" value="{{ image.name }}">
+        </label>
         {% endif %}
 
         <a href="/image/{{ image.name }}" target="_blank">
@@ -773,6 +829,15 @@ HTML_TEMPLATE = """
                         {{ "Unstar" if image.starred else "Mark Star" }}
                     </button>
                 </form>
+
+                {% if image.species %}
+                <form method="post" action="/clear_species/{{ image.name }}">
+                    <input type="hidden" name="filter" value="{{ mode }}">
+                    <input type="hidden" name="page" value="{{ page }}">
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                    <button type="submit" class="action-button species-err-button">Erreur espèce</button>
+                </form>
+                {% endif %}
 
                 <form
                     method="post"
@@ -824,6 +889,24 @@ HTML_TEMPLATE = """
     </a>
 </footer>
 
+{% if admin_mode %}
+<div id="bulk-bar" class="bulk-bar" hidden>
+    <span class="bulk-count" id="bulk-count"></span>
+    <button type="button" class="action-button tag-button"          onclick="bulkSubmit('bird')">Oiseau</button>
+    <button type="button" class="action-button tag-button"          onclick="bulkSubmit('motion')">Motion</button>
+    <button type="button" class="action-button star-button"         onclick="bulkSubmit('star')">Étoile</button>
+    <button type="button" class="action-button species-err-button"  onclick="bulkSubmit('clear_species')">Erreur espèce</button>
+    <button type="button" class="action-button delete-button"       onclick="bulkSubmit('delete')">Supprimer</button>
+    <button type="button" class="action-button" style="background:#222;border:1px solid #444" onclick="clearSelection()">Annuler</button>
+    <form id="bulk-form" method="post" action="/bulk_action" style="display:none">
+        <input type="hidden" name="filter" value="{{ mode }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+        <input type="hidden" name="action" id="bulk-action-val">
+    </form>
+</div>
+{% endif %}
+
 <script>
     const header = document.getElementById("page-header");
     let isCompact = false;
@@ -843,6 +926,52 @@ HTML_TEMPLATE = """
 
     window.addEventListener("scroll", updateHeaderCompactMode, { passive: true });
     updateHeaderCompactMode();
+
+    // ── Sélection groupée ──────────────────────────────────────────────────
+    const bulkBar   = document.getElementById("bulk-bar");
+    const bulkCount = document.getElementById("bulk-count");
+    const bulkForm  = document.getElementById("bulk-form");
+
+    function getChecked() {
+        return [...document.querySelectorAll(".bulk-cb:checked")];
+    }
+
+    function updateBulkBar() {
+        if (!bulkBar) return;
+        const n = getChecked().length;
+        bulkBar.hidden = n === 0;
+        if (n > 0) bulkCount.textContent = n + " sélectionnée" + (n > 1 ? "s" : "");
+    }
+
+    function bulkSubmit(action) {
+        const checked = getChecked();
+        if (checked.length === 0) return;
+        if (action === "delete" && !confirm("Supprimer " + checked.length + " photo(s) ?")) return;
+        document.getElementById("bulk-action-val").value = action;
+        bulkForm.querySelectorAll(".bf").forEach(el => el.remove());
+        checked.forEach(cb => {
+            const inp = document.createElement("input");
+            inp.type = "hidden"; inp.name = "filenames";
+            inp.value = cb.value; inp.className = "bf";
+            bulkForm.appendChild(inp);
+        });
+        bulkForm.submit();
+    }
+
+    function clearSelection() {
+        document.querySelectorAll(".bulk-cb").forEach(cb => {
+            cb.checked = false;
+            cb.closest(".card").classList.remove("selected");
+        });
+        updateBulkBar();
+    }
+
+    document.querySelectorAll(".bulk-cb").forEach(cb => {
+        cb.addEventListener("change", function () {
+            this.closest(".card").classList.toggle("selected", this.checked);
+            updateBulkBar();
+        });
+    });
 </script>
 
 </body>
@@ -1850,6 +1979,49 @@ def star(filename):
             per_page=per_page,
         )
     )
+
+
+def clear_species_tag(path: Path):
+    """Retire le suffixe _sp..._spconf... du nom de fichier."""
+    new_stem = re.sub(r"_sp[a-zA-Z0-9_-]+?_spconf[0-9.]+$", "", path.stem)
+    if new_stem == path.stem:
+        return
+    new_path = make_unique_path(path.parent / (new_stem + path.suffix))
+    delete_thumbnail(path.name)
+    path.rename(new_path)
+
+
+@app.route("/clear_species/<path:filename>", methods=["POST"])
+def clear_species(filename):
+    require_admin()
+    path = safe_image_path(filename)
+    clear_species_tag(path)
+    mode, page, per_page = current_nav_args_from_form()
+    return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
+
+
+@app.route("/bulk_action", methods=["POST"])
+def bulk_action():
+    require_admin()
+    action    = request.form.get("action", "")
+    filenames = request.form.getlist("filenames")
+    mode, page, per_page = current_nav_args_from_form()
+
+    for filename in filenames:
+        try:
+            path = safe_image_path(filename)
+        except Exception:
+            continue
+        if action == "delete":
+            delete_image_and_thumbnail(filename)
+        elif action in ("bird", "motion"):
+            retag_image(filename, action)
+        elif action == "star":
+            toggle_star_image(filename)
+        elif action == "clear_species":
+            clear_species_tag(path)
+
+    return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
 
 
 @app.route("/stats")
