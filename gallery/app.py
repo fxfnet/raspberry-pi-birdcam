@@ -871,15 +871,13 @@ HTML_TEMPLATE = """
     {% for sp in status.top_species %}
     <div class="bar-row--species">
         <div class="bar-label">
-            <a href="/?filter=species&species={{ sp.name }}" style="color:inherit;text-decoration:none">
+            <a href="/?filter=species&species={{ sp.name }}" style="color:inherit;text-decoration:none;border-bottom:1px dotted #666">
                 {{ sp.name }}{% if sp.french %} <span style="opacity:.65">({{ sp.french }})</span>{% endif %}
             </a>
         </div>
         <div class="bar-species-line">
             <div class="bar-track">
-                <a href="/?filter=species&species={{ sp.name }}" style="display:block;height:100%">
-                    <div class="bar-bird-fill" style="width: {{ (sp.count / status.top_species[0].count * 100) | round(1) }}%;height:100%"></div>
-                </a>
+                <div class="bar-bird-fill" style="width: {{ (sp.count / status.top_species[0].count * 100) | round(1) }}%"></div>
             </div>
             <div class="bar-count">{{ sp.count }}</div>
         </div>
@@ -1349,15 +1347,13 @@ STATS_TEMPLATE = """
         {% for sp in stats.top_species %}
         <div class="bar-row--species">
             <div class="bar-label">
-                <a href="/?filter=species&species={{ sp.name }}" style="color:inherit;text-decoration:none">
+                <a href="/?filter=species&species={{ sp.name }}" style="color:inherit;text-decoration:none;border-bottom:1px dotted #666">
                     {{ sp.name }}{% if sp.french %} <span style="opacity:.65">({{ sp.french }})</span>{% endif %}
                 </a>
             </div>
             <div class="bar-species-line">
                 <div class="bar-track">
-                    <a href="/?filter=species&species={{ sp.name }}" style="display:block;height:100%">
-                        <div class="bar-bird" style="width: {{ (sp.count / stats.max_species_count * 100) | round(1) }}%;height:100%"></div>
-                    </a>
+                    <div class="bar-bird" style="width: {{ (sp.count / stats.max_species_count * 100) | round(1) }}%"></div>
                 </div>
                 <div class="bar-value">{{ sp.count }}</div>
             </div>
