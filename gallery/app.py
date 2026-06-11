@@ -1504,7 +1504,7 @@ def filter_images(images, mode: str, species_query: str = ""):
         q = species_query.lower()
         return [
             image for image in images
-            if image["kind"] == "bird" and image.get("species", "").lower() == q
+            if image["kind"] == "bird" and (image.get("species") or "").lower() == q
         ]
 
     return images
