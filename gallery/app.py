@@ -548,6 +548,37 @@ HTML_TEMPLATE = """
         .bk-del     { background: #3a1f1f; border-color: #703030; }
         .bk-cancel  { background: #1a1a1a; border-color: #444; }
 
+        .card-extra {
+            margin-top: 0.1rem;
+        }
+
+        .card-extra summary {
+            cursor: pointer;
+            list-style: none;
+            color: var(--muted);
+            font-size: 0.8rem;
+        }
+
+        .card-extra summary::-webkit-details-marker { display: none; }
+
+        .card-extra summary::after {
+            content: " ↓";
+            font-size: 0.7rem;
+            opacity: 0.5;
+        }
+
+        .card-extra[open] summary::after {
+            content: " ↑";
+        }
+
+        .card-extra > div {
+            font-size: 0.78rem;
+            color: var(--muted);
+            margin-top: 0.15rem;
+            padding-left: 0.4rem;
+            border-left: 2px solid var(--border);
+        }
+
         .empty {
             padding: 2rem;
             color: #aaa;
@@ -815,13 +846,14 @@ HTML_TEMPLATE = """
 
             <div class="details">
                 <div>{{ image.date }}</div>
-                {% if image.species %}
-                <div>Espèce : {{ image.species }} ({{ image.species_conf }})</div>
-                {% else %}
-                <div>Best: {{ image.best_label }}</div>
-                {% endif %}
-                <div>Confidence: {{ image.confidence }}</div>
-                <div>Motion score: {{ image.motion_score }}</div>
+                <details class="card-extra">
+                    <summary>
+                        {% if image.species %}Espèce : {{ image.species }} ({{ image.species_conf }})
+                        {% else %}Best: {{ image.best_label }}{% endif %}
+                    </summary>
+                    <div>Confidence: {{ image.confidence }}</div>
+                    <div>Motion score: {{ image.motion_score }}</div>
+                </details>
             </div>
 
         </div>
