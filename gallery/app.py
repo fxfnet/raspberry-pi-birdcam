@@ -653,24 +653,28 @@ HTML_TEMPLATE = """
         <a class="filter {{ 'active' if mode == 'today' else '' }}" href="/?filter=today&per_page={{ per_page }}">Today</a>
         <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
         <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Motion only</a>
+        {% if mode == 'species' and species_query %}
+        <a class="filter active" href="/?filter=bird&per_page={{ per_page }}">× {{ species_query }}</a>
+        {% endif %}
         <a class="filter" href="/stats">Stats</a>
     </div>
 
+    {% set sp_param = "&species=" ~ species_query if species_query else "" %}
     <div class="pagination">
         <a class="page-link {{ 'disabled' if page <= 1 else '' }}"
-           href="/?filter={{ mode }}&page={{ page - 1 }}&per_page={{ per_page }}">
+           href="/?filter={{ mode }}&page={{ page - 1 }}&per_page={{ per_page }}{{ sp_param }}">
             Previous
         </a>
 
         {% for p in page_numbers %}
             <a class="page-link {{ 'active' if p == page else '' }}"
-               href="/?filter={{ mode }}&page={{ p }}&per_page={{ per_page }}">
+               href="/?filter={{ mode }}&page={{ p }}&per_page={{ per_page }}{{ sp_param }}">
                 {{ p }}
             </a>
         {% endfor %}
 
         <a class="page-link {{ 'disabled' if page >= total_pages else '' }}"
-           href="/?filter={{ mode }}&page={{ page + 1 }}&per_page={{ per_page }}">
+           href="/?filter={{ mode }}&page={{ page + 1 }}&per_page={{ per_page }}{{ sp_param }}">
             Next
         </a>
     </div>
@@ -714,7 +718,7 @@ HTML_TEMPLATE = """
 
         {% if status.top_species %}
         <div class="status-item">
-            Top : {% for sp in status.top_species %}{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %} {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}
+            Top : {% for sp in status.top_species %}<a href="/?filter=species&species={{ sp.name }}" style="color:inherit">{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %}</a> {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}
         </div>
         {% endif %}
 
@@ -737,7 +741,7 @@ HTML_TEMPLATE = """
         <span>latest visit: {{ status.latest_date }}</span>
         {% if status.top_species %}
         <span>·</span>
-        <span>{% for sp in status.top_species %}{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %} {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+        <span>{% for sp in status.top_species %}<a href="/?filter=species&species={{ sp.name }}" style="color:inherit">{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %}</a> {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
         {% endif %}
     </div>
     {% endif %}
@@ -867,11 +871,15 @@ HTML_TEMPLATE = """
     {% for sp in status.top_species %}
     <div class="bar-row--species">
         <div class="bar-label">
-            {{ sp.name }}{% if sp.french %} <span style="opacity:.65">({{ sp.french }})</span>{% endif %}
+            <a href="/?filter=species&species={{ sp.name }}" style="color:inherit;text-decoration:none">
+                {{ sp.name }}{% if sp.french %} <span style="opacity:.65">({{ sp.french }})</span>{% endif %}
+            </a>
         </div>
         <div class="bar-species-line">
             <div class="bar-track">
-                <div class="bar-bird-fill" style="width: {{ (sp.count / status.top_species[0].count * 100) | round(1) }}%"></div>
+                <a href="/?filter=species&species={{ sp.name }}" style="display:block;height:100%">
+                    <div class="bar-bird-fill" style="width: {{ (sp.count / status.top_species[0].count * 100) | round(1) }}%;height:100%"></div>
+                </a>
             </div>
             <div class="bar-count">{{ sp.count }}</div>
         </div>
@@ -1341,11 +1349,15 @@ STATS_TEMPLATE = """
         {% for sp in stats.top_species %}
         <div class="bar-row--species">
             <div class="bar-label">
-                {{ sp.name }}{% if sp.french %} <span style="opacity:.65">({{ sp.french }})</span>{% endif %}
+                <a href="/?filter=species&species={{ sp.name }}" style="color:inherit;text-decoration:none">
+                    {{ sp.name }}{% if sp.french %} <span style="opacity:.65">({{ sp.french }})</span>{% endif %}
+                </a>
             </div>
             <div class="bar-species-line">
                 <div class="bar-track">
-                    <div class="bar-bird" style="width: {{ (sp.count / stats.max_species_count * 100) | round(1) }}%"></div>
+                    <a href="/?filter=species&species={{ sp.name }}" style="display:block;height:100%">
+                        <div class="bar-bird" style="width: {{ (sp.count / stats.max_species_count * 100) | round(1) }}%;height:100%"></div>
+                    </a>
                 </div>
                 <div class="bar-value">{{ sp.count }}</div>
             </div>
@@ -1477,7 +1489,7 @@ def get_all_images():
     return images
 
 
-def filter_images(images, mode: str):
+def filter_images(images, mode: str, species_query: str = ""):
     today_key = date.today().strftime("%Y-%m-%d")
 
     if mode == "bird":
@@ -1491,6 +1503,13 @@ def filter_images(images, mode: str):
 
     if mode == "motion":
         return [image for image in images if image["kind"] == "motion"]
+
+    if mode == "species" and species_query:
+        q = species_query.lower()
+        return [
+            image for image in images
+            if image["kind"] == "bird" and image.get("species", "").lower() == q
+        ]
 
     return images
 
@@ -1875,15 +1894,16 @@ def latest_star_image(all_images):
 def index():
     # Birds by default.
     mode = request.args.get("filter", "bird")
+    species_query = request.args.get("species", "")
 
-    if mode not in {"all", "bird", "motion", "star", "today"}:
+    if mode not in {"all", "bird", "motion", "star", "today", "species"}:
         mode = "bird"
 
     page = parse_int_arg("page", 1, 1, 100000)
     per_page = parse_int_arg("per_page", DEFAULT_PER_PAGE, 1, MAX_PER_PAGE)
 
     all_images = get_all_images()
-    filtered_images = filter_images(all_images, mode)
+    filtered_images = filter_images(all_images, mode, species_query)
 
     page_images, page, total_pages = paginate_images(filtered_images, page, per_page)
     page_numbers = make_page_numbers(page, total_pages)
@@ -1902,6 +1922,7 @@ def index():
         page_numbers=page_numbers,
         per_page=per_page,
         mode=mode,
+        species_query=species_query,
         status=status,
         latest_star=latest_star,
         capture_dir=str(CAPTURE_DIR),
