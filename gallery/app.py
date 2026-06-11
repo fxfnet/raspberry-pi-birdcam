@@ -759,6 +759,7 @@ HTML_TEMPLATE = """
 
     <div class="hero-intro">
         A Raspberry Pi watches the feeder, captures movement, and keeps track of the winged visitors.
+        Species identification is powered by a custom model trained on Paris garden birds — still learning, results will improve over time.
         <a href="https://toysfab.com/2026/05/une-camera-automatique-pour-mangeoire-a-oiseaux-avec-un-raspberry-pi/"
            target="_blank" rel="noopener noreferrer">Read the Toysfab build story</a>.
     </div>
