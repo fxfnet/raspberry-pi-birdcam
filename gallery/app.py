@@ -643,30 +643,6 @@ HTML_TEMPLATE = """
             white-space: nowrap;
         }
 
-        .cs-new-toggle {
-            background: transparent !important;
-            border-color: #555 !important;
-            color: var(--muted) !important;
-        }
-
-        .cs-new-fields {
-            width: 100%;
-            display: flex;
-            gap: 0.3rem;
-            margin-top: 0.3rem;
-            flex-wrap: wrap;
-        }
-
-        .cs-input {
-            flex: 1;
-            min-width: 100px;
-            background: var(--panel2);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text);
-            font-size: 0.78rem;
-            padding: 0.25rem 0.4rem;
-        }
 
         .empty {
             padding: 2rem;
@@ -951,17 +927,12 @@ HTML_TEMPLATE = """
                         <input type="hidden" name="filter" value="{{ mode }}">
                         <input type="hidden" name="page" value="{{ page }}">
                         <input type="hidden" name="per_page" value="{{ per_page }}">
-                        <select name="species" class="cs-select">
+                        <select name="species">
                             {% for sp in paris_species %}
                             <option value="{{ sp.scientific }}">{{ sp.french }} ({{ sp.scientific }})</option>
                             {% endfor %}
                         </select>
                         <button type="submit">OK</button>
-                        <button type="button" class="cs-new-toggle" onclick="csToggleNew(this)">+ new</button>
-                        <div class="cs-new-fields" hidden>
-                            <input class="cs-input" type="text" name="new_scientific" placeholder="Parus major" autocomplete="off">
-                            <input class="cs-input" type="text" name="new_french" placeholder="Mésange charbonnière" autocomplete="off">
-                        </div>
                     </form>
                 </details>
                 {% endif %}
@@ -1067,14 +1038,6 @@ HTML_TEMPLATE = """
     window.addEventListener("scroll", updateHeaderCompactMode, { passive: true });
     updateHeaderCompactMode();
 
-    function csToggleNew(btn) {
-        const fields = btn.closest("form").querySelector(".cs-new-fields");
-        const select = btn.closest("form").querySelector(".cs-select");
-        const isOpen = !fields.hidden;
-        fields.hidden = isOpen;
-        select.disabled = !isOpen;
-        btn.textContent = isOpen ? "+ new" : "↩ list";
-    }
 
     // ── Sélection groupée ──────────────────────────────────────────────────
     const bulkBar   = document.getElementById("bulk-bar");
@@ -2147,25 +2110,7 @@ def correct_species(filename):
     require_admin()
     path = safe_image_path(filename)
 
-    new_scientific = request.form.get("new_scientific", "").strip()
-    new_french     = request.form.get("new_french", "").strip()
-
-    if new_scientific:
-        # Nouvelle espèce saisie manuellement
-        scientific = new_scientific
-        if new_scientific.lower() not in FRENCH_NAMES:
-            # Ajouter à la liste en mémoire
-            FRENCH_NAMES[new_scientific.lower()] = new_french or new_scientific
-            entry = {"scientific": new_scientific, "french": new_french or new_scientific, "note": "added_manually"}
-            PARIS_SPECIES_LIST.append(entry)
-            PARIS_SPECIES_LIST.sort(key=lambda s: s["french"])
-            # Persister dans species.json
-            if _SPECIES_JSON.exists():
-                data = json.loads(_SPECIES_JSON.read_text())
-                data.append(entry)
-                _SPECIES_JSON.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    else:
-        scientific = request.form.get("species", "").strip()
+    scientific = request.form.get("species", "").strip()
 
     if not scientific:
         abort(400)
