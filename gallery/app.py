@@ -616,14 +616,12 @@ HTML_TEMPLATE = """
         .correct-species-form {
             margin-top: 0.4rem;
             display: flex;
-            gap: 0.35rem;
-            align-items: center;
-            flex-wrap: wrap;
+            flex-direction: column;
+            gap: 0.3rem;
         }
 
         .correct-species-form select {
-            flex: 1;
-            min-width: 0;
+            width: 100%;
             background: var(--panel2);
             border: 1px solid var(--border);
             border-radius: 6px;
@@ -633,14 +631,14 @@ HTML_TEMPLATE = """
         }
 
         .correct-species-form button {
+            align-self: flex-start;
             background: #1f2e1f;
             border: 1px solid #3d5c3d;
             border-radius: 6px;
             color: #eee;
             font-size: 0.78rem;
-            padding: 0.25rem 0.6rem;
+            padding: 0.25rem 0.75rem;
             cursor: pointer;
-            white-space: nowrap;
         }
 
 
