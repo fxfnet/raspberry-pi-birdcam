@@ -2071,7 +2071,7 @@ def index():
         admin_mode=ADMIN_MODE,
         paris_species=PARIS_SPECIES_LIST,
         base_url=request.host_url.rstrip("/"),
-        og_image_name=(latest_star.name if latest_star else
+        og_image_name=(latest_star["name"] if latest_star else
                        next((img["name"] for img in all_images if img["kind"] == "bird"), None)),
     )
 
