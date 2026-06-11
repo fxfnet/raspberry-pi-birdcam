@@ -69,8 +69,30 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{ "Birdcam Admin" if admin_mode else "Birdcam Gallery" }}</title>
+    <title>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam · Paris bird feeder" }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    {% if not admin_mode %}
+    {% set og_title = "Mangeoire Cam · Paris bird feeder" %}
+    {% set og_desc = "A Raspberry Pi watches a Paris bird feeder — " ~ status.bird_count ~ " bird pictures captured, species identified by AI." %}
+    {% set og_image = (base_url ~ "/image/" ~ latest_star.name) if latest_star else "" %}
+    <meta property="og:type"        content="website">
+    <meta property="og:url"         content="{{ base_url }}/">
+    <meta property="og:title"       content="{{ og_title }}">
+    <meta property="og:description" content="{{ og_desc }}">
+    {% if og_image %}
+    <meta property="og:image"       content="{{ og_image }}">
+    <meta property="og:image:width"  content="1280">
+    <meta property="og:image:height" content="960">
+    <meta property="og:image:alt"   content="Bird at the feeder">
+    {% endif %}
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="{{ og_title }}">
+    <meta name="twitter:description" content="{{ og_desc }}">
+    {% if og_image %}
+    <meta name="twitter:image"       content="{{ og_image }}">
+    {% endif %}
+    {% endif %}
 
     <style>
         :root {
@@ -2049,6 +2071,7 @@ def index():
         capture_dir=str(CAPTURE_DIR),
         admin_mode=ADMIN_MODE,
         paris_species=PARIS_SPECIES_LIST,
+        base_url=request.host_url.rstrip("/"),
     )
 
 
