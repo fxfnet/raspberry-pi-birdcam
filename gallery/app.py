@@ -707,10 +707,10 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="filters">
-        <a class="filter {{ 'active' if mode == 'bird' else '' }}" href="/?filter=bird&per_page={{ per_page }}">Oiseaux</a>
-        <a class="filter {{ 'active' if mode == 'star' else '' }}" href="/?filter=star&per_page={{ per_page }}">Étoiles</a>
-        <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">Tout</a>
-        <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Mouvements</a>
+        <a class="filter {{ 'active' if mode == 'bird' else '' }}" href="/?filter=bird&per_page={{ per_page }}">Birds</a>
+        <a class="filter {{ 'active' if mode == 'star' else '' }}" href="/?filter=star&per_page={{ per_page }}">Stars</a>
+        <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
+        <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Motion only</a>
         {% if mode == 'species' and species_query %}
         <a class="filter active" href="/?filter=bird&per_page={{ per_page }}">× {{ species_query }}</a>
         {% endif %}
