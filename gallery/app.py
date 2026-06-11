@@ -873,8 +873,7 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="admin-warning">
-        ADMIN MODE · Delete, retag and star actions are enabled. ·
-        <button type="button" onclick="selectAll()" style="background:transparent;border:none;color:inherit;cursor:pointer;text-decoration:underline;font-size:inherit;padding:0">Select all</button>
+        ADMIN MODE · Delete, retag and star actions are enabled.
     </div>
     {% endif %}
 </header>
@@ -943,6 +942,9 @@ HTML_TEMPLATE = """
 {% endif %}
 
 <div class="bottom-nav">
+    {% if admin_mode %}
+    <button type="button" class="bk-btn bk-cancel" onclick="selectAll()">Select all</button>
+    {% endif %}
     <div class="pagination">
         <a class="page-link {{ 'disabled' if page <= 1 else '' }}"
            href="/?filter={{ mode }}&page={{ page - 1 }}&per_page={{ per_page }}{{ sp_param }}">←</a>
