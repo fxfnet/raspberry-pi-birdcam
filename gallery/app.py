@@ -567,6 +567,17 @@ HTML_TEMPLATE = """
         .bk-del     { background: #3a1f1f; border-color: #703030; }
         .bk-cancel  { background: #1a1a1a; border-color: #444; }
 
+        .bk-select {
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: var(--text);
+            font-size: 0.78rem;
+            padding: 0.28rem 0.65rem;
+            cursor: pointer;
+            max-width: 160px;
+        }
+
         .card-extra {
             margin-top: 0.1rem;
         }
@@ -918,22 +929,6 @@ HTML_TEMPLATE = """
                     <div>Confidence: {{ image.confidence }}</div>
                     <div>Motion score: {{ image.motion_score }}</div>
                 </details>
-                {% if admin_mode and paris_species %}
-                <details class="correct-species-wrap">
-                    <summary>✎ Correct species</summary>
-                    <form class="correct-species-form" method="post" action="/correct_species/{{ image.name }}">
-                        <input type="hidden" name="filter" value="{{ mode }}">
-                        <input type="hidden" name="page" value="{{ page }}">
-                        <input type="hidden" name="per_page" value="{{ per_page }}">
-                        <select name="species">
-                            {% for sp in paris_species %}
-                            <option value="{{ sp.scientific }}">{{ sp.french }} ({{ sp.scientific }})</option>
-                            {% endfor %}
-                        </select>
-                        <button type="submit">OK</button>
-                    </form>
-                </details>
-                {% endif %}
             </div>
 
         </div>
@@ -1003,8 +998,17 @@ HTML_TEMPLATE = """
         <button type="button" class="bk-btn bk-tag"     onclick="bulkSubmit('bird')">Bird</button>
         <button type="button" class="bk-btn bk-tag"     onclick="bulkSubmit('motion')">Motion</button>
         <button type="button" class="bk-btn bk-star"    onclick="bulkSubmit('star')">Star</button>
-        <button type="button" class="bk-btn bk-species" onclick="bulkSubmit('clear_species')">Clear species</button>
         <button type="button" class="bk-btn bk-del"     onclick="bulkSubmit('delete')">Delete</button>
+        {% if paris_species %}
+        <select id="bulk-species-select" class="bk-select">
+            <option value="">— species —</option>
+            {% for sp in paris_species %}
+            <option value="{{ sp.scientific }}">{{ sp.french }}</option>
+            {% endfor %}
+        </select>
+        <button type="button" class="bk-btn bk-species" onclick="bulkSubmit('correct_species')">Correct</button>
+        {% endif %}
+        <button type="button" class="bk-btn bk-species" onclick="bulkSubmit('clear_species')">Clear species</button>
         <button type="button" class="bk-btn bk-cancel"  onclick="clearSelection()">Cancel</button>
     </div>
     <form id="bulk-form" method="post" action="/bulk_action" style="display:none">
@@ -1012,6 +1016,7 @@ HTML_TEMPLATE = """
         <input type="hidden" name="page" value="{{ page }}">
         <input type="hidden" name="per_page" value="{{ per_page }}">
         <input type="hidden" name="action" id="bulk-action-val">
+        <input type="hidden" name="species" id="bulk-species-val">
     </form>
 </div>
 {% endif %}
@@ -1056,7 +1061,12 @@ HTML_TEMPLATE = """
     function bulkSubmit(action) {
         const checked = getChecked();
         if (checked.length === 0) return;
-        if (action === "delete" && !confirm("Supprimer " + checked.length + " photo(s) ?")) return;
+        if (action === "correct_species") {
+            const sel = document.getElementById("bulk-species-select");
+            if (!sel || !sel.value) { alert("Select a species first."); return; }
+            document.getElementById("bulk-species-val").value = sel.value;
+        }
+        if (action === "delete" && !confirm("Delete " + checked.length + " photo(s)?")) return;
         document.getElementById("bulk-action-val").value = action;
         bulkForm.querySelectorAll(".bf").forEach(el => el.remove());
         checked.forEach(cb => {
@@ -2152,6 +2162,7 @@ def bulk_action():
     require_admin()
     action    = request.form.get("action", "")
     filenames = request.form.getlist("filenames")
+    scientific = request.form.get("species", "").strip()
     mode, page, per_page = current_nav_args_from_form()
 
     for filename in filenames:
@@ -2167,6 +2178,15 @@ def bulk_action():
             toggle_star_image(filename)
         elif action == "clear_species":
             clear_species_tag(path)
+        elif action == "correct_species" and scientific:
+            old_match = re.search(r"_sp([a-zA-Z0-9_-]+?)_spconf([0-9.]+)", path.name)
+            was = old_match.group(1).replace("_", " ").title() if old_match else ""
+            clean_stem = re.sub(r"_sp[a-zA-Z0-9_-]+?_spconf[0-9.]+$", "", path.stem)
+            sp_slug = re.sub(r"[^a-z0-9_-]+", "_", scientific.lower())
+            new_path = make_unique_path(path.parent / f"{clean_stem}_sp{sp_slug}_spconf1.00.jpg")
+            delete_thumbnail(path.name)
+            path.rename(new_path)
+            append_correction(new_path.name, was, scientific)
 
     return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
 
