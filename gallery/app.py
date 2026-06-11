@@ -35,14 +35,33 @@ THUMB_DIR.mkdir(parents=True, exist_ok=True)
 # Clé = nom scientifique en minuscules (ex. "parus major"), valeur = nom français.
 _SPECIES_JSON = Path(__file__).parent.parent / "training" / "species.json"
 FRENCH_NAMES: dict[str, str] = {}
+PARIS_SPECIES_LIST: list[dict] = []   # [{scientific, french}] trié par nom français
 if _SPECIES_JSON.exists():
-    for _sp in json.loads(_SPECIES_JSON.read_text()):
+    _raw = json.loads(_SPECIES_JSON.read_text())
+    for _sp in _raw:
         FRENCH_NAMES[_sp["scientific"].lower()] = _sp["french"]
+    PARIS_SPECIES_LIST = sorted(_raw, key=lambda s: s["french"])
+
+CORRECTIONS_PATH = Path.home() / "birdcam" / "corrections.json"
 
 
 def french_name(display_name: str) -> str:
     """Retourne le nom français pour un nom affiché type 'Parus Major', ou '' si inconnu."""
     return FRENCH_NAMES.get(display_name.lower(), "")
+
+
+def append_correction(image_name: str, was: str, now: str):
+    from datetime import datetime
+    entry = {"image": image_name, "was": was, "now": now,
+             "corrected_at": datetime.now().isoformat(timespec="seconds")}
+    data = []
+    if CORRECTIONS_PATH.exists():
+        try:
+            data = json.loads(CORRECTIONS_PATH.read_text())
+        except Exception:
+            pass
+    data.append(entry)
+    CORRECTIONS_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
 
 HTML_TEMPLATE = """
@@ -579,6 +598,51 @@ HTML_TEMPLATE = """
             border-left: 2px solid var(--border);
         }
 
+        .correct-species-wrap {
+            margin-top: 0.5rem;
+        }
+
+        .correct-species-wrap summary {
+            cursor: pointer;
+            list-style: none;
+            font-size: 0.75rem;
+            color: var(--muted);
+            opacity: 0.7;
+        }
+
+        .correct-species-wrap summary::-webkit-details-marker { display: none; }
+        .correct-species-wrap summary:hover { opacity: 1; }
+
+        .correct-species-form {
+            margin-top: 0.4rem;
+            display: flex;
+            gap: 0.35rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .correct-species-form select {
+            flex: 1;
+            min-width: 0;
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.78rem;
+            padding: 0.25rem 0.4rem;
+        }
+
+        .correct-species-form button {
+            background: #1f2e1f;
+            border: 1px solid #3d5c3d;
+            border-radius: 6px;
+            color: #eee;
+            font-size: 0.78rem;
+            padding: 0.25rem 0.6rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
         .empty {
             padding: 2rem;
             color: #aaa;
@@ -855,6 +919,22 @@ HTML_TEMPLATE = """
                     <div>Confidence: {{ image.confidence }}</div>
                     <div>Motion score: {{ image.motion_score }}</div>
                 </details>
+                {% if admin_mode and paris_species %}
+                <details class="correct-species-wrap">
+                    <summary>✎ Correct species</summary>
+                    <form class="correct-species-form" method="post" action="/correct_species/{{ image.name }}">
+                        <input type="hidden" name="filter" value="{{ mode }}">
+                        <input type="hidden" name="page" value="{{ page }}">
+                        <input type="hidden" name="per_page" value="{{ per_page }}">
+                        <select name="species">
+                            {% for sp in paris_species %}
+                            <option value="{{ sp.scientific }}">{{ sp.french }} ({{ sp.scientific }})</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">OK</button>
+                    </form>
+                </details>
+                {% endif %}
             </div>
 
         </div>
@@ -1947,6 +2027,7 @@ def index():
         latest_star=latest_star,
         capture_dir=str(CAPTURE_DIR),
         admin_mode=ADMIN_MODE,
+        paris_species=PARIS_SPECIES_LIST,
     )
 
 
@@ -2020,6 +2101,32 @@ def star(filename):
             per_page=per_page,
         )
     )
+
+
+@app.route("/correct_species/<path:filename>", methods=["POST"])
+def correct_species(filename):
+    require_admin()
+    path = safe_image_path(filename)
+    new_scientific = request.form.get("species", "").strip()
+    if not new_scientific:
+        abort(400)
+
+    old_species = re.search(r"_sp([a-zA-Z0-9_-]+?)_spconf([0-9.]+)", path.name)
+    was = old_species.group(1).replace("_", " ").title() if old_species else ""
+
+    # Renommer avec la correction humaine (spconf1.00 = vérifié manuellement)
+    clean_stem = re.sub(r"_sp[a-zA-Z0-9_-]+?_spconf[0-9.]+$", "", path.stem)
+    sp_slug = re.sub(r"[^a-z0-9_-]+", "_", new_scientific.lower())
+    new_path = make_unique_path(path.parent / f"{clean_stem}_sp{sp_slug}_spconf1.00.jpg")
+    delete_thumbnail(path.name)
+    path.rename(new_path)
+
+    # Sauvegarder la correction pour l'entraînement
+    now_display = new_scientific.replace("_", " ").title()
+    append_correction(new_path.name, was, new_scientific)
+
+    mode, page, per_page = current_nav_args_from_form()
+    return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
 
 
 def clear_species_tag(path: Path):
