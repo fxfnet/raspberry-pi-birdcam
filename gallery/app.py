@@ -104,8 +104,7 @@ HTML_TEMPLATE = """
         header.compact .subtitle,
         header.compact .status-panel,
         header.compact .public-summary,
-        header.compact .per-page,
-        header.compact .pagination,
+        header.compact .public-info,
         header.compact .admin-warning,
         header.compact .hero-intro {
             display: none;
@@ -115,9 +114,7 @@ HTML_TEMPLATE = """
             margin-top: 0.45rem;
         }
 
-        header.compact .filter,
-        header.compact .page-link,
-        header.compact .per-page a {
+        header.compact .filter {
             padding: 0.32rem 0.55rem;
             font-size: 0.78rem;
         }
@@ -133,6 +130,53 @@ HTML_TEMPLATE = """
             color: var(--muted);
             font-size: 0.9rem;
         }
+
+        .public-info {
+            margin-top: 0.6rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .public-info-stats {
+            font-size: 0.88rem;
+            color: var(--text);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.2rem 0;
+            align-items: center;
+        }
+
+        .public-info-stats .sep { color: var(--muted); margin: 0 0.3rem; }
+        .public-info-stats .muted { color: var(--muted); }
+
+        .public-info-species {
+            font-size: 0.82rem;
+            color: var(--muted);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0;
+        }
+
+        .public-info-species a {
+            color: var(--bird);
+            text-decoration: none;
+        }
+
+        .public-info-species a:hover { text-decoration: underline; }
+        .public-info-species .sp-count { margin: 0 0.15rem; }
+        .public-info-species .sep { color: var(--muted); }
+
+        .bottom-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 1rem 1rem 0.5rem;
+        }
+
+        .bottom-nav .muted { color: var(--muted); font-size: 0.85rem; }
 
         .hero-intro {
             margin-top: 0.7rem;
@@ -628,65 +672,49 @@ HTML_TEMPLATE = """
 </head>
 <body>
 
+{% set sp_param = "&species=" ~ species_query if species_query else "" %}
+
 <header id="page-header">
     <h1>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }}</h1>
 
-    <div class="subtitle">
-        {{ count }} picture{{ "" if count == 1 else "s" }} shown ·
-        {{ filtered_total }} matching ·
-        {{ total }} total ·
-        page {{ page }} / {{ total_pages }}
+    {% if not admin_mode %}
+    <div class="public-info">
+        <div class="public-info-stats">
+            <span>{{ status.bird_count }} oiseaux</span>
+            <span class="sep">·</span>
+            <span>{{ status.star_count }} étoiles</span>
+            <span class="sep">·</span>
+            <span>{{ status.today_count }} aujourd'hui</span>
+            <span class="sep">·</span>
+            <span>{{ count }} affichées · page {{ page }}/{{ total_pages }}</span>
+            <span class="sep">·</span>
+            <span class="muted">{{ status.latest_date }}</span>
+        </div>
+        {% if status.top_species %}
+        <div class="public-info-species">
+            {% for sp in status.top_species %}
+            <a href="/?filter=species&species={{ sp.name }}">{% if sp.french %}{{ sp.french }}{% else %}{{ sp.name }}{% endif %}</a><span class="sp-count">{{ sp.count }}</span>{% if not loop.last %}<span class="sep"> · </span>{% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
+    {% endif %}
 
     <div class="hero-intro">
         A Raspberry Pi watches the feeder, captures movement, and keeps track of the winged visitors.
         <a href="https://toysfab.com/2026/05/une-camera-automatique-pour-mangeoire-a-oiseaux-avec-un-raspberry-pi/"
-           target="_blank"
-           rel="noopener noreferrer">
-            Read the Toysfab build story
-        </a>.
+           target="_blank" rel="noopener noreferrer">Read the Toysfab build story</a>.
     </div>
 
     <div class="filters">
-        <a class="filter {{ 'active' if mode == 'bird' else '' }}" href="/?filter=bird&per_page={{ per_page }}">Birds</a>
-        <a class="filter {{ 'active' if mode == 'star' else '' }}" href="/?filter=star&per_page={{ per_page }}">Stars</a>
-        <a class="filter {{ 'active' if mode == 'today' else '' }}" href="/?filter=today&per_page={{ per_page }}">Today</a>
-        <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
-        <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Motion only</a>
+        <a class="filter {{ 'active' if mode == 'bird' else '' }}" href="/?filter=bird&per_page={{ per_page }}">Oiseaux</a>
+        <a class="filter {{ 'active' if mode == 'star' else '' }}" href="/?filter=star&per_page={{ per_page }}">Étoiles</a>
+        <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">Tout</a>
+        <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Mouvements</a>
         {% if mode == 'species' and species_query %}
         <a class="filter active" href="/?filter=bird&per_page={{ per_page }}">× {{ species_query }}</a>
         {% endif %}
         <a class="filter" href="/stats">Stats</a>
-    </div>
-
-    {% set sp_param = "&species=" ~ species_query if species_query else "" %}
-    <div class="pagination">
-        <a class="page-link {{ 'disabled' if page <= 1 else '' }}"
-           href="/?filter={{ mode }}&page={{ page - 1 }}&per_page={{ per_page }}{{ sp_param }}">
-            Previous
-        </a>
-
-        {% for p in page_numbers %}
-            <a class="page-link {{ 'active' if p == page else '' }}"
-               href="/?filter={{ mode }}&page={{ p }}&per_page={{ per_page }}{{ sp_param }}">
-                {{ p }}
-            </a>
-        {% endfor %}
-
-        <a class="page-link {{ 'disabled' if page >= total_pages else '' }}"
-           href="/?filter={{ mode }}&page={{ page + 1 }}&per_page={{ per_page }}{{ sp_param }}">
-            Next
-        </a>
-    </div>
-
-    <div class="per-page">
-        <span style="color:#aaa;font-size:0.85rem;">Per page:</span>
-        {% for n in [12, 24, 48, 96] %}
-            <a class="{{ 'active' if n == per_page else '' }}"
-               href="/?filter={{ mode }}&page=1&per_page={{ n }}">
-                {{ n }}
-            </a>
-        {% endfor %}
     </div>
 
     {% if admin_mode %}
@@ -699,54 +727,19 @@ HTML_TEMPLATE = """
             <span class="status-dot {{ 'ok' if status.birdcam_service.active else 'bad' }}"></span>
             Camera: {{ status.birdcam_service.status }}
         </div>
-
-        <div class="status-item">
-            Birds: {{ status.bird_count }}
-        </div>
-
-        <div class="status-item">
-            Stars: {{ status.star_count }}
-        </div>
-
-        <div class="status-item">
-            Today: {{ status.today_count }}
-        </div>
-
-        <div class="status-item">
-            Motion: {{ status.motion_count }}
-        </div>
-
+        <div class="status-item">Birds: {{ status.bird_count }}</div>
+        <div class="status-item">Stars: {{ status.star_count }}</div>
+        <div class="status-item">Today: {{ status.today_count }}</div>
+        <div class="status-item">Motion: {{ status.motion_count }}</div>
         {% if status.top_species %}
         <div class="status-item">
             Top : {% for sp in status.top_species %}<a href="/?filter=species&species={{ sp.name }}" style="color:inherit">{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %}</a> {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}
         </div>
         {% endif %}
-
-        <div class="status-item">
-            Latest: {{ status.latest_date }}
-        </div>
-
-        <div class="status-item">
-            Disk: {{ status.free_gb }} GB free / {{ status.total_gb }} GB · {{ status.used_percent }}% used
-        </div>
+        <div class="status-item">Latest: {{ status.latest_date }}</div>
+        <div class="status-item">Disk: {{ status.free_gb }} GB free / {{ status.total_gb }} GB · {{ status.used_percent }}% used</div>
     </div>
-    {% else %}
-    <div class="public-summary">
-        <span>{{ status.bird_count }} bird pictures</span>
-        <span>·</span>
-        <span>{{ status.star_count }} stars</span>
-        <span>·</span>
-        <span>{{ status.today_count }} today</span>
-        <span>·</span>
-        <span>latest visit: {{ status.latest_date }}</span>
-        {% if status.top_species %}
-        <span>·</span>
-        <span>{% for sp in status.top_species %}<a href="/?filter=species&species={{ sp.name }}" style="color:inherit">{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %}</a> {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
-        {% endif %}
-    </div>
-    {% endif %}
 
-    {% if admin_mode %}
     <div class="admin-warning">
         ADMIN MODE · Delete, retag and star actions are enabled.
     </div>
@@ -864,6 +857,26 @@ HTML_TEMPLATE = """
     No pictures found for this filter in {{ capture_dir }}.
 </div>
 {% endif %}
+
+<div class="bottom-nav">
+    <div class="pagination">
+        <a class="page-link {{ 'disabled' if page <= 1 else '' }}"
+           href="/?filter={{ mode }}&page={{ page - 1 }}&per_page={{ per_page }}{{ sp_param }}">←</a>
+        {% for p in page_numbers %}
+            <a class="page-link {{ 'active' if p == page else '' }}"
+               href="/?filter={{ mode }}&page={{ p }}&per_page={{ per_page }}{{ sp_param }}">{{ p }}</a>
+        {% endfor %}
+        <a class="page-link {{ 'disabled' if page >= total_pages else '' }}"
+           href="/?filter={{ mode }}&page={{ page + 1 }}&per_page={{ per_page }}{{ sp_param }}">→</a>
+    </div>
+    <div class="per-page">
+        <span class="muted">Par page :</span>
+        {% for n in [12, 24, 48, 96] %}
+            <a class="page-link {{ 'active' if n == per_page else '' }}"
+               href="/?filter={{ mode }}&page=1&per_page={{ n }}{{ sp_param }}">{{ n }}</a>
+        {% endfor %}
+    </div>
+</div>
 
 {% if admin_mode and status.top_species %}
 <div class="species-section">
