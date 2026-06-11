@@ -873,7 +873,8 @@ HTML_TEMPLATE = """
     </div>
 
     <div class="admin-warning">
-        ADMIN MODE · Delete, retag and star actions are enabled.
+        ADMIN MODE · Delete, retag and star actions are enabled. ·
+        <button type="button" onclick="selectAll()" style="background:transparent;border:none;color:inherit;cursor:pointer;text-decoration:underline;font-size:inherit;padding:0">Select all</button>
     </div>
     {% endif %}
 </header>
@@ -1076,6 +1077,14 @@ HTML_TEMPLATE = """
             bulkForm.appendChild(inp);
         });
         bulkForm.submit();
+    }
+
+    function selectAll() {
+        document.querySelectorAll(".bulk-cb").forEach(cb => {
+            cb.checked = true;
+            cb.closest(".card").classList.add("selected");
+        });
+        updateBulkBar();
     }
 
     function clearSelection() {
