@@ -690,6 +690,32 @@ HTML_TEMPLATE = """
             font-size: 0.78rem;
         }
 
+        .camera-toggle-button {
+            color: #111;
+            border-radius: 999px;
+            padding: 0.45rem 0.7rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+        }
+
+        .camera-toggle-button.stop {
+            background: var(--danger);
+        }
+
+        .camera-toggle-button.stop:hover {
+            opacity: 0.85;
+        }
+
+        .camera-toggle-button.start {
+            background: var(--bird);
+        }
+
+        .camera-toggle-button.start:hover {
+            opacity: 0.85;
+        }
+
         footer {
             padding: 1rem;
             color: #777;
@@ -880,6 +906,16 @@ HTML_TEMPLATE = """
             <span class="status-dot {{ 'ok' if status.birdcam_service.active else 'bad' }}"></span>
             Camera: {{ status.birdcam_service.status }}
         </div>
+
+        <form method="post" action="/camera/toggle">
+            <input type="hidden" name="filter" value="{{ mode }}">
+            <input type="hidden" name="page" value="{{ page }}">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <button type="submit" class="camera-toggle-button {{ 'stop' if status.birdcam_service.active else 'start' }}">
+                {{ "Stop Camera" if status.birdcam_service.active else "Start Camera" }}
+            </button>
+        </form>
+
         <div class="status-item">Birds: {{ status.bird_count }}</div>
         <div class="status-item">Stars: {{ status.star_count }}</div>
         <div class="status-item">Today: {{ status.today_count }}</div>
@@ -2222,6 +2258,24 @@ def bulk_action():
             delete_thumbnail(path.name)
             path.rename(new_path)
             append_correction(new_path.name, was, scientific)
+
+@app.route("/camera/toggle", methods=["POST"])
+def camera_toggle():
+    require_admin()
+
+    mode, page, per_page = current_nav_args_from_form()
+
+    svc = service_status("birdcam")
+    action = "stop" if svc["active"] else "start"
+
+    try:
+        subprocess.run(
+            ["sudo", "systemctl", action, "birdcam"],
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception:
+        pass
 
     return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
 
