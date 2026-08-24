@@ -2,9 +2,13 @@
 captures/*
 !captures/.gitkeep
 
-# Downloaded AI models
+# Downloaded AI models (easily re-fetched, no need to version)
 model/*
 !model/.gitkeep
+
+# Custom-trained species model (not re-downloadable, must be versioned)
+!model/garden_birds.onnx
+!model/garden_birds_labels.csv
 
 # Python cache
 __pycache__/
