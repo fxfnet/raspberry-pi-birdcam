@@ -1,0 +1,7 @@
+[Unit]
+Description=Birdcam Purge Old Motion Pictures
+
+[Service]
+Type=oneshot
+User=fx
+ExecStart=/home/fx/birdcam/scripts/purge_old_files.sh

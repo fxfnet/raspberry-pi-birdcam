@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CAPTURE_DIR="/home/fx/birdcam/captures"
-THUMB_DIR="/home/fx/birdcam/gallery/thumbs"
+CAPTURE_DIR="${HOME}/birdcam/captures"
+THUMB_DIR="${HOME}/birdcam/gallery/thumbs"
 
 DAYS_TO_KEEP=14
 
