@@ -32,3 +32,8 @@ env/
 .env
 
 gallery/thumbs
+
+# Training dataset and intermediate checkpoint (only the final garden_birds.onnx is versioned)
+dataset/
+training/model_best.pth
+training/model_best.json
