@@ -2259,6 +2259,8 @@ def bulk_action():
             path.rename(new_path)
             append_correction(new_path.name, was, scientific)
 
+    return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
+
 @app.route("/camera/toggle", methods=["POST"])
 def camera_toggle():
     require_admin()
