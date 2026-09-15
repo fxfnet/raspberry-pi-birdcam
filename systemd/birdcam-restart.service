@@ -1,0 +1,6 @@
+[Unit]
+Description=Nightly Birdcam Service Restart
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart birdcam.service
