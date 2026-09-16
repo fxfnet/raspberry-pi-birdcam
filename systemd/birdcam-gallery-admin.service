@@ -3,9 +3,9 @@ Description=Birdcam Admin Gallery
 After=network.target
 
 [Service]
-User=fx
-WorkingDirectory=/home/fx/birdcam/gallery
-ExecStart=/usr/bin/python3 /home/fx/birdcam/gallery/app.py
+User=fxf
+WorkingDirectory=/home/fxf/birdcam/gallery
+ExecStart=/usr/bin/python3 /home/fxf/birdcam/gallery/app.py
 Restart=always
 RestartSec=5
 Environment=PORT=5001

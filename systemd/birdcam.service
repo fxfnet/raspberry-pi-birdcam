@@ -3,9 +3,9 @@ Description=Raspberry Pi Birdcam Motion Capture
 After=network.target
 
 [Service]
-User=fx
-WorkingDirectory=/home/fx/birdcam
-ExecStart=/usr/bin/python3 /home/fx/birdcam/birdcam_motion.py
+User=fxf
+WorkingDirectory=/home/fxf/birdcam
+ExecStart=/usr/bin/python3 /home/fxf/birdcam/birdcam_motion.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
