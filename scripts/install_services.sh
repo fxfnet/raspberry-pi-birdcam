@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "$(id -u)" -eq 0 ]; then
+  echo "Lancer ce script en tant qu'utilisateur normal (sans sudo) : il appelle sudo lui-même." >&2
+  exit 1
+fi
+
 PROJECT_DIR="${HOME}/birdcam"
 USER_NAME="$(whoami)"
 
