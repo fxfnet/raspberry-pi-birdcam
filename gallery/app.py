@@ -44,6 +44,10 @@ if _SPECIES_JSON.exists():
     PARIS_SPECIES_LIST = sorted(_raw, key=lambda s: s["french"])
 
 CORRECTIONS_PATH = Path.home() / "birdcam" / "corrections.json"
+
+# Espèces étiquetées dès 0.3 (SPECIES_CONFIDENCE_THRESHOLD de birdcam_motion.py) ;
+# en dessous de ce seuil, le badge est estompé et suivi de "?".
+SPECIES_SURE_THRESHOLD = 0.6
 CAMERA_TEST_IMAGE_PATH = Path.home() / "birdcam" / "camera_test.jpg"
 CAMERA_TEST_STATUS_PATH = Path.home() / "birdcam" / "camera_test.json"
 
@@ -444,6 +448,17 @@ HTML_TEMPLATE = """
             left: auto;
             right: 10px;
             background: var(--toysfab);
+        }
+
+        .badge.species {
+            top: 44px;
+            background: #fff;
+            letter-spacing: 0;
+        }
+
+        .badge.species.probable {
+            opacity: 0.7;
+            font-style: italic;
         }
 
         .meta {
@@ -993,6 +1008,12 @@ HTML_TEMPLATE = """
         <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
         {% if image.starred %}
         <span class="badge star">STAR</span>
+        {% endif %}
+        {% if image.species %}
+        <span class="badge species {{ '' if image.species_sure else 'probable' }}"
+              title="{{ image.species }} ({{ image.species_conf }})">
+            {{ image.species_french or image.species }}{% if not image.species_sure %} ?{% endif %}
+        </span>
         {% endif %}
 
         {% if admin_mode %}
@@ -1655,13 +1676,14 @@ def parse_image_metadata(path: Path):
     # Arrête avant _sp pour ne pas capturer le suffixe espèce.
     best_match = re.search(r"_best([a-zA-Z0-9_-]+?)(?=_sp[a-z]|\.jpg|$)", clean_name)
     motion_match = re.search(r"_motion([0-9]+)", clean_name)
-    species_match = re.search(r"_sp([a-zA-Z0-9_-]+?)_spconf([0-9.]+)", clean_name)
+    species_match = re.search(r"_sp([a-zA-Z0-9_-]+?)_spconf([0-9]+(?:\.[0-9]+)?)", clean_name)
 
     confidence = confidence_match.group(1) if confidence_match else "n/a"
     best_label = best_match.group(1) if best_match else "n/a"
     motion_score = motion_match.group(1) if motion_match else "n/a"
     species = species_match.group(1).replace("_", " ").title() if species_match else None
     species_conf = species_match.group(2) if species_match else None
+    species_sure = bool(species_conf) and float(species_conf) >= SPECIES_SURE_THRESHOLD
 
     stat = path.stat()
     modified = datetime.fromtimestamp(stat.st_mtime)
@@ -1678,6 +1700,8 @@ def parse_image_metadata(path: Path):
         "motion_score": motion_score,
         "species": species,
         "species_conf": species_conf,
+        "species_sure": species_sure,
+        "species_french": french_name(species) if species else "",
         "date": modified.strftime("%Y-%m-%d %H:%M:%S"),
         "day": modified.strftime("%Y-%m-%d"),
         "mtime": stat.st_mtime,

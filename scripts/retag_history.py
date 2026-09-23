@@ -23,7 +23,7 @@ import numpy as np
 
 BASE_DIR = Path.home() / "birdcam"
 MODEL_DIR = BASE_DIR / "model"
-SPECIES_CONFIDENCE_THRESHOLD = 0.6
+SPECIES_CONFIDENCE_THRESHOLD = 0.3
 
 # Détecteur d'oiseau, mêmes réglages que birdcam_motion.py : l'espèce est
 # classée sur le cadre de l'oiseau, pas sur l'image entière.
@@ -249,7 +249,11 @@ def main():
 
     patterns = ["bird_*.jpg", "star_bird_*.jpg"]
     if args.retag:
-        files = sorted(f for pat in patterns for f in capture_dir.glob(pat))
+        # spconf1.00 = espèce corrigée à la main dans l'admin : ne jamais l'écraser.
+        files = sorted(
+            f for pat in patterns for f in capture_dir.glob(pat)
+            if "_spconf1.00" not in f.name
+        )
     else:
         files = sorted(
             f for pat in patterns for f in capture_dir.glob(pat)
