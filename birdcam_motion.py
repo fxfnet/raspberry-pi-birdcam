@@ -11,6 +11,7 @@ import time
 import sys
 import re
 import os
+import socket
 
 
 
@@ -360,6 +361,31 @@ camera_config = picam2.create_video_configuration(
 
 
 # ------------------------------------------------------------
+# Watchdog systemd (sd_notify)
+# ------------------------------------------------------------
+
+def sd_notify(message: str):
+    """
+    Envoie un message à systemd (Type=notify, WatchdogSec). Sans systemd
+    (NOTIFY_SOCKET absent, ex : lancement manuel), ne fait rien.
+
+    Complète le WATCHDOG interne : quand libcamera signale "Camera frontend
+    has timed out!", capture_array() bloque indéfiniment, la boucle ne tourne
+    plus et seul un contrôle extérieur au processus peut le détecter.
+    """
+    address = os.environ.get("NOTIFY_SOCKET")
+    if not address:
+        return
+    if address.startswith("@"):
+        address = "\0" + address[1:]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
+            sock.sendto(message.encode(), address)
+    except OSError as error:
+        print(f"sd_notify failed: {error}", file=sys.stderr)
+
+
+# ------------------------------------------------------------
 # Main loop
 # ------------------------------------------------------------
 
@@ -387,9 +413,11 @@ try:
     time.sleep(WARMUP_SECONDS)
 
     print("Birdcam started. Press Ctrl+C to stop.")
+    sd_notify("READY=1")
 
     while True:
         frame = picam2.capture_array()
+        sd_notify("WATCHDOG=1")
         frame_buffer.append(frame.copy())
 
         gray = prepare_motion_gray(frame)

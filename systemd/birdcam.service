@@ -3,6 +3,11 @@ Description=Raspberry Pi Birdcam Motion Capture
 After=network.target
 
 [Service]
+Type=notify
+NotifyAccess=main
+# Le script envoie WATCHDOG=1 à chaque image reçue : si la caméra se fige
+# (capture_array bloquée), systemd tue le processus et Restart=always le relance.
+WatchdogSec=60
 User=fxf
 WorkingDirectory=/home/fxf/birdcam
 ExecStart=/usr/bin/python3 /home/fxf/birdcam/birdcam_motion.py
