@@ -6,7 +6,7 @@ Usage :
     python3 training/export_onnx.py --model training/model_best.pth \
                                     --out   /tmp/garden_birds.onnx
     # Puis copier sur le Pi :
-    scp /tmp/garden_birds.onnx fx@oaso.local:~/birdcam/model/
+    scp /tmp/garden_birds.onnx fxf@oaso.local:~/birdcam/model/
 """
 
 import argparse
@@ -81,8 +81,8 @@ def export(model_path: str, out_path: str):
     print(f"ONNX exporté   : {out_path}  ({Path(out_path).stat().st_size // 1024} Ko)")
     print(f"Labels exportés : {labels_path}  ({n_cls} classes)")
     print(f"\nCopier sur le Pi :")
-    print(f"  scp {out_path} fx@oaso.local:~/birdcam/model/garden_birds.onnx")
-    print(f"  scp {labels_path} fx@oaso.local:~/birdcam/model/")
+    print(f"  scp {out_path} fxf@oaso.local:~/birdcam/model/garden_birds.onnx")
+    print(f"  scp {labels_path} fxf@oaso.local:~/birdcam/model/")
     print(f"\nPuis dans birdcam_motion.py, changer :")
     print(f'  SPECIES_MODEL_PATH  = MODEL_DIR / "garden_birds.onnx"')
     print(f'  SPECIES_LABELS_PATH = MODEL_DIR / "garden_birds_labels.csv"')
