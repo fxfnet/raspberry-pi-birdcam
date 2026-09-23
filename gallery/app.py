@@ -10,6 +10,7 @@ import re
 import json
 import cv2
 import os
+import threading
 import time
 
 
@@ -75,18 +76,24 @@ def rank_species(images, limit: int):
     ]
 
 
+_corrections_lock = threading.Lock()
+
+
 def append_correction(image_name: str, was: str, now: str):
     from datetime import datetime
     entry = {"image": image_name, "was": was, "now": now,
              "corrected_at": datetime.now().isoformat(timespec="seconds")}
-    data = []
-    if CORRECTIONS_PATH.exists():
-        try:
+    # Verrou + écriture atomique : Flask sert les requêtes en threads, et
+    # retag_history.py s'appuie sur ce fichier pour ne pas remettre une
+    # espèce retirée à la main. Un fichier illisible n'est jamais écrasé.
+    with _corrections_lock:
+        data = []
+        if CORRECTIONS_PATH.exists():
             data = json.loads(CORRECTIONS_PATH.read_text())
-        except Exception:
-            pass
-    data.append(entry)
-    CORRECTIONS_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        data.append(entry)
+        tmp_path = CORRECTIONS_PATH.with_suffix(".json.tmp")
+        tmp_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        os.replace(tmp_path, CORRECTIONS_PATH)
 
 
 HTML_TEMPLATE = """

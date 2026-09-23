@@ -208,6 +208,12 @@ def classify(net, labels, crop_bgr):
     return None, float(output[top_indices[0]])
 
 
+def capture_key(name: str) -> str:
+    """Horodatage de capture (ex : 20260918_102547_377), stable malgré les renommages."""
+    match = re.search(r"\d{8}_\d{6}_\d{3}", name)
+    return match.group(0) if match else name
+
+
 def strip_species_suffix(stem: str) -> str:
     """Retire _sp..._spconf... du nom de fichier pour re-tagger."""
     return re.sub(r"_sp[a-zA-Z0-9_-]+?_spconf[0-9.]+$", "", stem)
@@ -261,19 +267,19 @@ def main():
         )
 
     # Espèces retirées à la main dans l'admin (corrections.json, now="") :
-    # ne pas les réétiqueter.
+    # ne pas les réétiqueter. Repérées par l'horodatage de capture, seule partie
+    # du nom qui ne change pas (étoile, bird/motion, --best, suffixe _1).
     corrections_path = BASE_DIR / "corrections.json"
     cleared = set()
     if corrections_path.exists():
         try:
-            # Sans le préfixe star_ : mettre/retirer l'étoile renomme le fichier.
-            cleared = {
-                c["image"].removeprefix("star_")
-                for c in json.loads(corrections_path.read_text()) if not c.get("now")
-            }
+            corrections = json.loads(corrections_path.read_text())
+            cleared = {capture_key(c["image"]) for c in corrections if not c.get("now")}
         except (ValueError, KeyError, TypeError):
-            print(f"corrections.json illisible, ignoré : {corrections_path}")
-    files = [f for f in files if f.name.removeprefix("star_") not in cleared]
+            print(f"corrections.json illisible : {corrections_path}")
+            print("Arrêt, pour ne pas remettre des espèces retirées à la main.")
+            sys.exit(1)
+    files = [f for f in files if capture_key(f.name) not in cleared]
 
     print(f"{len(files)} fichiers à traiter.\n")
 
