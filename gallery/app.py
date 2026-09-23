@@ -358,8 +358,9 @@ HTML_TEMPLATE = """
 
         .latest-star img {
             width: 100%;
-            height: 360px;
-            object-fit: cover;
+            height: auto;
+            max-height: 70vh;
+            object-fit: contain;
             display: block;
             background: #222;
         }
@@ -811,10 +812,6 @@ HTML_TEMPLATE = """
 
             .latest-star-inner {
                 grid-template-columns: 1fr;
-            }
-
-            .latest-star img {
-                height: 240px;
             }
 
             .latest-star-title {
