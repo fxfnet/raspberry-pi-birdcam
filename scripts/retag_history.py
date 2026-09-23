@@ -157,7 +157,8 @@ def relabel_best(detector, capture_dir, thumb_dir, dry_run):
 def find_bird_crop(detector, img_bgr):
     """
     Retourne le cadre (BGR) du meilleur oiseau détecté, ou None.
-    Même recadrage que classify_species() dans birdcam_motion.py.
+    img_bgr est l'image brute reconstituée (voir JPEG_GAINS_BGR), comme la
+    frame vue par birdcam_motion.py ; même recadrage que classify_species().
     """
     blob = cv2.dnn.blobFromImage(img_bgr, 0.007843, (300, 300), 127.5)
     detector.setInput(blob)
@@ -266,7 +267,8 @@ def main():
             errors += 1
             continue
 
-        crop = find_bird_crop(detector, img_bgr)
+        raw = np.clip(img_bgr / JPEG_GAINS_BGR, 0, 255).astype(np.uint8)
+        crop = find_bird_crop(detector, raw)
         species, score = classify(net, labels, crop) if crop is not None else (None, 0.0)
 
         # Construire le nouveau nom en retirant l'ancien suffixe espèce

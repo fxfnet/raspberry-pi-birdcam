@@ -492,7 +492,7 @@ try:
             # Classify species une seule fois sur la frame où l'oiseau est
             # détecté avec le plus de confiance (et non sur le meilleur label
             # toutes classes confondues, qui peut être une fausse détection
-            # "dog"/"bottle" plus confiante que l'oiseau lui-même).
+            # "bottle"/"person" plus confiante que l'oiseau lui-même).
             best = max(
                 (d for d in detections if d[4]),  # bird_detected == True
                 key=lambda d: d[8],               # bird_score
