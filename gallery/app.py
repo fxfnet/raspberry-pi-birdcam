@@ -86,14 +86,17 @@ def append_correction(image_name: str, was: str, now: str):
     # Verrou + écriture atomique : Flask sert les requêtes en threads, et
     # retag_history.py s'appuie sur ce fichier pour ne pas remettre une
     # espèce retirée à la main. Un fichier illisible n'est jamais écrasé.
+    # resolve() : sur le Pi, corrections.json est un lien vers la clé USB ;
+    # os.replace() sur le lien lui-même le remplacerait par un fichier local.
+    target = CORRECTIONS_PATH.resolve()
     with _corrections_lock:
         data = []
-        if CORRECTIONS_PATH.exists():
-            data = json.loads(CORRECTIONS_PATH.read_text())
+        if target.exists():
+            data = json.loads(target.read_text())
         data.append(entry)
-        tmp_path = CORRECTIONS_PATH.with_suffix(".json.tmp")
+        tmp_path = target.with_suffix(".json.tmp")
         tmp_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-        os.replace(tmp_path, CORRECTIONS_PATH)
+        os.replace(tmp_path, target)
 
 
 HTML_TEMPLATE = """
