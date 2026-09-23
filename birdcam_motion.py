@@ -108,7 +108,7 @@ if _GARDEN.exists() and _GARDEN_LABELS.exists():
 else:
     SPECIES_MODEL_PATH  = _AIY
     SPECIES_LABELS_PATH = _AIY_LABELS
-SPECIES_CONFIDENCE_THRESHOLD = 0.05
+SPECIES_CONFIDENCE_THRESHOLD = 0.6
 
 CLASSES = [
     "background",
@@ -322,10 +322,9 @@ def classify_species(rgb_frame, bbox):
         swapRB=True,
     )
     species_net.setInput(blob)
-    raw = species_net.forward()[0]
-    # Softmax : garden_birds émet des logits bruts.
-    exp_raw = np.exp(raw - raw.max())
-    output = exp_raw / exp_raw.sum()
+    # garden_birds sort déjà des probabilités (softmax intégré à l'export,
+    # voir training/export_onnx.py) : ne pas réappliquer de softmax.
+    output = species_net.forward()[0]
 
     # Parcourir le top-10 et retourner la première espèce présente à Paris.
     top_indices = np.argsort(output)[::-1][:10]

@@ -21,7 +21,15 @@ import numpy as np
 
 BASE_DIR = Path.home() / "birdcam"
 MODEL_DIR = BASE_DIR / "model"
-SPECIES_CONFIDENCE_THRESHOLD = 0.05
+SPECIES_CONFIDENCE_THRESHOLD = 0.6
+
+# Détecteur d'oiseau, mêmes réglages que birdcam_motion.py : l'espèce est
+# classée sur le cadre de l'oiseau, pas sur l'image entière.
+PROTOTXT_PATH = MODEL_DIR / "MobileNetSSD_deploy.prototxt"
+DETECTOR_PATH = MODEL_DIR / "MobileNetSSD_deploy.caffemodel"
+BIRD_CLASS_ID = 3  # "bird" dans CLASSES de birdcam_motion.py
+BIRD_CONFIDENCE_THRESHOLD = 0.45
+CROP_PAD = 0.08
 TOP_K = 10
 
 # Même logique de sélection de modèle que birdcam_motion.py
@@ -67,23 +75,46 @@ def load_labels(path):
     return labels
 
 
-def softmax(x):
-    e = np.exp(x - x.max())
-    return e / e.sum()
+def find_bird_crop(detector, img_bgr):
+    """
+    Retourne le cadre (BGR) du meilleur oiseau détecté, ou None.
+    Même recadrage que classify_species() dans birdcam_motion.py.
+    """
+    blob = cv2.dnn.blobFromImage(img_bgr, 0.007843, (300, 300), 127.5)
+    detector.setInput(blob)
+    detections = detector.forward()[0, 0]
+
+    birds = [
+        d for d in detections
+        if int(d[1]) == BIRD_CLASS_ID and float(d[2]) >= BIRD_CONFIDENCE_THRESHOLD
+    ]
+    if not birds:
+        return None
+    bbox = max(birds, key=lambda d: float(d[2]))[3:7]
+
+    h, w = img_bgr.shape[:2]
+    x1 = max(0, int((float(bbox[0]) - CROP_PAD) * w))
+    y1 = max(0, int((float(bbox[1]) - CROP_PAD) * h))
+    x2 = min(w, int((float(bbox[2]) + CROP_PAD) * w))
+    y2 = min(h, int((float(bbox[3]) + CROP_PAD) * h))
+    crop = img_bgr[y1:y2, x1:x2]
+    return crop if crop.size else None
 
 
-def classify(net, labels, image_rgb):
+def classify(net, labels, crop_bgr):
     # scalefactor=1.0 : le modèle reçoit [0,255] et divise lui-même par 255.
+    # swapRB=True : cv2.imread donne du BGR, le modèle attend du RGB.
     blob = cv2.dnn.blobFromImage(
-        image_rgb,
+        crop_bgr,
         scalefactor=1.0,
         size=(224, 224),
         mean=(0, 0, 0),
-        swapRB=False,
+        swapRB=True,
     )
     net.setInput(blob)
-    # Appliquer softmax : garden_birds émet des logits bruts (pas de softmax dans l'archi).
-    output = softmax(net.forward()[0])
+    # garden_birds sort déjà des probabilités (softmax intégré à l'export,
+    # voir training/export_onnx.py) : ne pas réappliquer de softmax.
+    output = net.forward()[0]
 
     top_indices = np.argsort(output)[::-1][:TOP_K]
     for idx in top_indices:
@@ -115,7 +146,7 @@ def main():
 
     capture_dir = Path(args.dir)
 
-    for path in (SPECIES_MODEL_PATH, SPECIES_LABELS_PATH):
+    for path in (SPECIES_MODEL_PATH, SPECIES_LABELS_PATH, PROTOTXT_PATH, DETECTOR_PATH):
         if not path.exists():
             print(f"Fichier manquant : {path}")
             sys.exit(1)
@@ -124,6 +155,7 @@ def main():
     print(f"Filtre Paris : {len(PARIS_SPECIES)} espèces")
     print("Chargement du modèle...")
     net = cv2.dnn.readNetFromONNX(str(SPECIES_MODEL_PATH))
+    detector = cv2.dnn.readNetFromCaffe(str(PROTOTXT_PATH), str(DETECTOR_PATH))
     labels = load_labels(SPECIES_LABELS_PATH)
     print(f"{len(labels)} espèces chargées.\n")
 
@@ -149,8 +181,8 @@ def main():
             errors += 1
             continue
 
-        image_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        species, score = classify(net, labels, image_rgb)
+        crop = find_bird_crop(detector, img_bgr)
+        species, score = classify(net, labels, crop) if crop is not None else (None, 0.0)
 
         # Construire le nouveau nom en retirant l'ancien suffixe espèce
         clean_stem = strip_species_suffix(path.stem)
