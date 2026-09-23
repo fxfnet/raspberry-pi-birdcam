@@ -4,10 +4,12 @@ Applique le classifieur d'espèces aux captures bird_*.jpg existantes
 et renomme les fichiers avec le suffixe _sp{espèce}_spconf{score}.
 
 Usage :
-    python3 scripts/retag_history.py [--dry-run] [--retag] [--dir /chemin/captures]
+    python3 scripts/retag_history.py [--dry-run] [--retag] [--best] [--dir /chemin/captures]
 
     --retag : re-traite aussi les fichiers déjà tagués (pour corriger les
               espèces nord-américaines avec le filtre Paris)
+    --best  : réécrit _conf/_best des captures étiquetées dog/cow/horse/sheep
+              avec le détecteur actuel (préfixe et espèce inchangés)
 """
 
 import argparse
@@ -27,7 +29,18 @@ SPECIES_CONFIDENCE_THRESHOLD = 0.6
 # classée sur le cadre de l'oiseau, pas sur l'image entière.
 PROTOTXT_PATH = MODEL_DIR / "MobileNetSSD_deploy.prototxt"
 DETECTOR_PATH = MODEL_DIR / "MobileNetSSD_deploy.caffemodel"
-BIRD_CLASS_ID = 3  # "bird" dans CLASSES de birdcam_motion.py
+CLASSES = [
+    "background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
+    "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike",
+    "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor",
+]
+# Comme FEEDER_BIRD_ALIASES dans birdcam_motion.py : un gros plan d'oiseau
+# sort souvent en "dog" ou "cow", compté ici comme "bird".
+FEEDER_BIRD_ALIASES = {"dog", "cow", "horse", "sheep"}
+
+# Gains couleur de save_rgb_jpeg() (R, G, B), dans l'ordre BGR de cv2.imread.
+# Les diviser redonne l'image brute que voit le détecteur pendant la capture.
+JPEG_GAINS_BGR = np.array((0.754, 0.883, 0.831), dtype=np.float32)
 BIRD_CONFIDENCE_THRESHOLD = 0.45
 CROP_PAD = 0.08
 TOP_K = 10
@@ -75,6 +88,72 @@ def load_labels(path):
     return labels
 
 
+def detector_label(detection):
+    class_id = int(detection[1])
+    if class_id < 0 or class_id >= len(CLASSES):
+        return None
+    label = CLASSES[class_id]
+    return "bird" if label in FEEDER_BIRD_ALIASES else label
+
+
+def relabel_best(detector, capture_dir, thumb_dir, dry_run):
+    """
+    Réécrit la partie _conf{score}_best{label} du nom des captures étiquetées
+    dog/cow/horse/sheep (FEEDER_BIRD_ALIASES) avec le détecteur actuel. Les
+    autres captures ne sont pas touchées, ni le préfixe (bird_/motion_/star_,
+    qui peut venir d'un tri manuel dans l'admin), ni l'étiquette d'espèce.
+    """
+    files = sorted(capture_dir.glob("*.jpg"))
+    print(f"{len(files)} fichiers à traiter.\n")
+    changed = unchanged = errors = 0
+
+    for path in files:
+        match = re.search(r"_conf[0-9.]+_best([a-z]+)", path.stem)
+        if not match or match.group(1) not in FEEDER_BIRD_ALIASES:
+            unchanged += 1
+            continue
+        img_bgr = cv2.imread(str(path))
+        if img_bgr is None:
+            print(f"  SKIP (illisible) : {path.name}")
+            errors += 1
+            continue
+
+        raw = np.clip(img_bgr / JPEG_GAINS_BGR, 0, 255).astype(np.uint8)
+        detector.setInput(cv2.dnn.blobFromImage(raw, 0.007843, (300, 300), 127.5))
+        best_label, best_score = "none", 0.0
+        for d in detector.forward()[0, 0]:
+            label = detector_label(d)
+            if label is not None and float(d[2]) > best_score:
+                best_label, best_score = label, float(d[2])
+
+        new_stem = re.sub(
+            r"_conf[0-9.]+_best[a-z]+",
+            f"_conf{best_score:.2f}_best{best_label}",
+            path.stem,
+            count=1,
+        )
+        new_path = path.with_name(new_stem + ".jpg")
+        if new_path == path:
+            unchanged += 1
+            continue
+        if new_path.exists():
+            print(f"  SKIP (existe déjà) : {new_path.name}")
+            errors += 1
+            continue
+
+        if dry_run:
+            print(f"  DRY  {path.name}\n    →  {new_path.name}")
+        else:
+            path.rename(new_path)
+            _rename_thumb(path, new_path, thumb_dir)
+            print(f"  OK   {new_path.name}")
+        changed += 1
+
+    print(f"\nTerminé — {changed} modifiés, {unchanged} inchangés, {errors} erreurs.")
+    if dry_run:
+        print("(dry-run : aucun fichier modifié)")
+
+
 def find_bird_crop(detector, img_bgr):
     """
     Retourne le cadre (BGR) du meilleur oiseau détecté, ou None.
@@ -86,7 +165,7 @@ def find_bird_crop(detector, img_bgr):
 
     birds = [
         d for d in detections
-        if int(d[1]) == BIRD_CLASS_ID and float(d[2]) >= BIRD_CONFIDENCE_THRESHOLD
+        if detector_label(d) == "bird" and float(d[2]) >= BIRD_CONFIDENCE_THRESHOLD
     ]
     if not birds:
         return None
@@ -142,6 +221,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Affiche sans renommer")
     parser.add_argument("--retag",   action="store_true", help="Re-traite les fichiers déjà tagués")
     parser.add_argument("--dir", default=str(BASE_DIR / "captures"), help="Dossier captures")
+    parser.add_argument("--best", action="store_true",
+                        help="Réécrit _conf/_best des captures dog/cow/horse/sheep (au lieu des espèces)")
     args = parser.parse_args()
 
     capture_dir = Path(args.dir)
@@ -160,6 +241,10 @@ def main():
     print(f"{len(labels)} espèces chargées.\n")
 
     thumb_dir = Path.home() / "birdcam" / "gallery" / "thumbs"
+
+    if args.best:
+        relabel_best(detector, capture_dir, thumb_dir, args.dry_run)
+        return
 
     patterns = ["bird_*.jpg", "star_bird_*.jpg"]
     if args.retag:

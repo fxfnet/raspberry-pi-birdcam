@@ -95,6 +95,12 @@ PIXEL_DIFF_THRESHOLD = 30
 BIRD_CONFIDENCE_THRESHOLD = 0.45
 TARGET_LABEL = "bird"
 
+# MobileNetSSD (PASCAL VOC) a appris des oiseaux vus de loin : une mésange en
+# gros plan sur la mangeoire sort souvent en "dog" ou "cow". Devant la
+# mangeoire, ces classes sont en pratique toujours un oiseau. "cat" et
+# "person" restent distincts : ils peuvent réellement apparaître.
+FEEDER_BIRD_ALIASES = {"dog", "cow", "horse", "sheep"}
+
 # Modèle espèces : garden_birds (32 espèces Paris, custom) en priorité,
 # sinon fallback sur aiy_birds_V1 (964 espèces iNaturalist générique).
 _GARDEN = MODEL_DIR / "garden_birds.onnx"
@@ -278,6 +284,8 @@ def detect_bird(rgb_frame):
             continue
 
         label = CLASSES[class_id]
+        if label in FEEDER_BIRD_ALIASES:
+            label = TARGET_LABEL
 
         if confidence > best_score:
             best_score = confidence
