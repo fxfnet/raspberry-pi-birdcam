@@ -1816,7 +1816,8 @@ def run_camera_test():
         result["message"] = str(error)
 
     if was_active:
-        subprocess.run(["sudo", "systemctl", "start", "birdcam"], capture_output=True, timeout=10)
+        # Type=notify : "start" attend READY=1 (~11 s après chargement des modèles).
+        subprocess.run(["sudo", "systemctl", "start", "birdcam"], capture_output=True, timeout=30)
 
     CAMERA_TEST_STATUS_PATH.write_text(json.dumps(result))
     return result
