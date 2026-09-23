@@ -10,6 +10,7 @@ import re
 import json
 import cv2
 import os
+import time
 
 
 app = Flask(__name__)
@@ -43,6 +44,8 @@ if _SPECIES_JSON.exists():
     PARIS_SPECIES_LIST = sorted(_raw, key=lambda s: s["french"])
 
 CORRECTIONS_PATH = Path.home() / "birdcam" / "corrections.json"
+CAMERA_TEST_IMAGE_PATH = Path.home() / "birdcam" / "camera_test.jpg"
+CAMERA_TEST_STATUS_PATH = Path.home() / "birdcam" / "camera_test.json"
 
 
 def french_name(display_name: str) -> str:
@@ -716,6 +719,14 @@ HTML_TEMPLATE = """
             opacity: 0.85;
         }
 
+        .camera-toggle-button.test {
+            background: var(--muted);
+        }
+
+        .camera-toggle-button.test:hover {
+            opacity: 0.85;
+        }
+
         footer {
             padding: 1rem;
             color: #777;
@@ -915,6 +926,27 @@ HTML_TEMPLATE = """
                 {{ "Stop Camera" if status.birdcam_service.active else "Start Camera" }}
             </button>
         </form>
+
+        <form method="post" action="/camera/test">
+            <input type="hidden" name="filter" value="{{ mode }}">
+            <input type="hidden" name="page" value="{{ page }}">
+            <input type="hidden" name="per_page" value="{{ per_page }}">
+            <button type="submit" class="camera-toggle-button test">
+                Test Camera
+            </button>
+        </form>
+
+        {% if status.camera_test %}
+        <div class="status-item">
+            <span class="status-dot {{ 'ok' if status.camera_test.ok else 'bad' }}"></span>
+            Test: {{ status.camera_test.message }} ({{ status.camera_test.timestamp }})
+        </div>
+        {% if status.camera_test.ok %}
+        <div class="status-item">
+            <a href="/camera-test-image?t={{ status.camera_test.timestamp }}" target="_blank">Voir la photo de test</a>
+        </div>
+        {% endif %}
+        {% endif %}
 
         <div class="status-item">Birds: {{ status.bird_count }}</div>
         <div class="status-item">Stars: {{ status.star_count }}</div>
@@ -1736,6 +1768,60 @@ def service_status(service_name: str):
     }
 
 
+def read_camera_test_status():
+    if not CAMERA_TEST_STATUS_PATH.exists():
+        return None
+    try:
+        return json.loads(CAMERA_TEST_STATUS_PATH.read_text())
+    except Exception:
+        return None
+
+
+def run_camera_test():
+    """
+    Arrête brièvement birdcam.service, prend une photo avec rpicam-still
+    pour vérifier que la caméra répond encore, puis relance le service.
+    Un seul processus peut tenir le capteur CSI ouvert à la fois, d'où
+    l'arrêt temporaire.
+    """
+    require_admin()
+
+    was_active = service_status("birdcam")["active"]
+
+    if was_active:
+        subprocess.run(["sudo", "systemctl", "stop", "birdcam"], capture_output=True, timeout=10)
+        time.sleep(1)
+
+    result = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "ok": False,
+        "message": "",
+    }
+
+    try:
+        proc = subprocess.run(
+            ["rpicam-still", "-t", "2000", "-o", str(CAMERA_TEST_IMAGE_PATH)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if proc.returncode == 0 and CAMERA_TEST_IMAGE_PATH.exists():
+            result["ok"] = True
+            result["message"] = "Caméra OK"
+        else:
+            result["message"] = (proc.stderr or proc.stdout or "échec rpicam-still").strip()[-500:]
+    except subprocess.TimeoutExpired:
+        result["message"] = "rpicam-still n'a pas répondu (timeout)"
+    except Exception as error:
+        result["message"] = str(error)
+
+    if was_active:
+        subprocess.run(["sudo", "systemctl", "start", "birdcam"], capture_output=True, timeout=10)
+
+    CAMERA_TEST_STATUS_PATH.write_text(json.dumps(result))
+    return result
+
+
 def build_status(all_images):
     if all_images:
         latest = all_images[0]
@@ -1765,6 +1851,7 @@ def build_status(all_images):
 
     return {
         "birdcam_service": service_status("birdcam"),
+        "camera_test": read_camera_test_status(),
         "bird_count": sum(1 for image in all_images if image["kind"] == "bird"),
         "motion_count": sum(1 for image in all_images if image["kind"] == "motion"),
         "star_count": sum(1 for image in all_images if image["starred"]),
@@ -2280,6 +2367,29 @@ def camera_toggle():
         pass
 
     return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
+
+
+@app.route("/camera/test", methods=["POST"])
+def camera_test():
+    require_admin()
+
+    mode, page, per_page = current_nav_args_from_form()
+
+    run_camera_test()
+
+    return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
+
+
+@app.route("/camera-test-image")
+def camera_test_image():
+    require_admin()
+
+    if not CAMERA_TEST_IMAGE_PATH.exists():
+        abort(404)
+
+    return send_from_directory(
+        CAMERA_TEST_IMAGE_PATH.parent, CAMERA_TEST_IMAGE_PATH.name
+    )
 
 
 @app.route("/stats")

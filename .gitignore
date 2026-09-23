@@ -31,6 +31,10 @@ env/
 # Local config
 .env
 
+# Camera test snapshot (regenerated on demand from the admin UI)
+camera_test.jpg
+camera_test.json
+
 gallery/thumbs
 
 # Training dataset and intermediate checkpoint (only the final garden_birds.onnx is versioned)
