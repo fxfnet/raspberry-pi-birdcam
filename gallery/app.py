@@ -57,6 +57,24 @@ def french_name(display_name: str) -> str:
     return FRENCH_NAMES.get(display_name.lower(), "")
 
 
+def rank_species(images, limit: int):
+    """
+    Classement des espèces sur les photos bird_, avec les étiquettes sûres
+    (>= SPECIES_SURE_THRESHOLD) et probables comptées séparément.
+    """
+    counts = {}
+    for image in images:
+        if image["kind"] == "bird" and image.get("species"):
+            entry = counts.setdefault(image["species"], {"sure": 0, "probable": 0})
+            entry["sure" if image["species_sure"] else "probable"] += 1
+    ranked = sorted(counts.items(), key=lambda x: (x[1]["sure"] + x[1]["probable"], x[1]["sure"]), reverse=True)
+    return [
+        {"name": sp, "count": c["sure"] + c["probable"], "sure": c["sure"],
+         "probable": c["probable"], "french": french_name(sp)}
+        for sp, c in ranked[:limit]
+    ]
+
+
 def append_correction(image_name: str, was: str, now: str):
     from datetime import datetime
     entry = {"image": image_name, "was": was, "now": now,
@@ -213,6 +231,7 @@ HTML_TEMPLATE = """
 
         .public-info-species a:hover { text-decoration: underline; }
         .public-info-species .sp-count { margin: 0 0.15rem; }
+        .public-info-species .sp-probable { color: var(--muted); font-style: italic; }
         .public-info-species .sep { color: var(--muted); }
 
         .bottom-nav {
@@ -857,11 +876,16 @@ HTML_TEMPLATE = """
             border: 1px solid var(--border);
             border-radius: 999px;
             overflow: hidden;
+            display: flex;
         }
 
         .bar-bird-fill {
             background: var(--bird);
             height: 100%;
+        }
+
+        .bar-bird-fill.probable {
+            opacity: 0.4;
         }
 
         .bar-count {
@@ -894,7 +918,7 @@ HTML_TEMPLATE = """
         {% if status.top_species %}
         <div class="public-info-species">
             {% for sp in status.top_species %}
-            <a href="/?filter=species&species={{ sp.name }}">{% if sp.french %}{{ sp.french }}{% else %}{{ sp.name }}{% endif %}</a><span class="sp-count">{{ sp.count }}</span>{% if not loop.last %}<span class="sep"> · </span>{% endif %}
+            <a href="/?filter=species&species={{ sp.name }}">{% if sp.french %}{{ sp.french }}{% else %}{{ sp.name }}{% endif %}</a><span class="sp-count">{{ sp.sure }}{% if sp.probable %}<span class="sp-probable" title="probables (confiance 0.3 à 0.6)"> +{{ sp.probable }} ?</span>{% endif %}</span>{% if not loop.last %}<span class="sep"> · </span>{% endif %}
             {% endfor %}
         </div>
         {% endif %}
@@ -966,7 +990,7 @@ HTML_TEMPLATE = """
         <div class="status-item">Motion: {{ status.motion_count }}</div>
         {% if status.top_species %}
         <div class="status-item">
-            Top : {% for sp in status.top_species %}<a href="/?filter=species&species={{ sp.name }}" style="color:inherit">{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %}</a> {{ sp.count }}{% if not loop.last %} · {% endif %}{% endfor %}
+            Top : {% for sp in status.top_species %}<a href="/?filter=species&species={{ sp.name }}" style="color:inherit">{{ sp.name }}{% if sp.french %} ({{ sp.french }}){% endif %}</a> {{ sp.sure }}{% if sp.probable %} +{{ sp.probable }} ?{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
         </div>
         {% endif %}
         <div class="status-item">Latest: {{ status.latest_date }}</div>
@@ -1083,9 +1107,10 @@ HTML_TEMPLATE = """
         </div>
         <div class="bar-species-line">
             <div class="bar-track">
-                <div class="bar-bird-fill" style="width: {{ (sp.count / status.top_species[0].count * 100) | round(1) }}%"></div>
+                <div class="bar-bird-fill" style="width: {{ (sp.sure / status.top_species[0].count * 100) | round(1) }}%"></div>
+                <div class="bar-bird-fill probable" style="width: {{ (sp.probable / status.top_species[0].count * 100) | round(1) }}%"></div>
             </div>
-            <div class="bar-count">{{ sp.count }}</div>
+            <div class="bar-count">{{ sp.sure }}{% if sp.probable %} +{{ sp.probable }} ?{% endif %}</div>
         </div>
     </div>
     {% endfor %}
@@ -1375,6 +1400,10 @@ STATS_TEMPLATE = """
             height: 100%;
         }
 
+        .bar-bird.probable {
+            opacity: 0.4;
+        }
+
         .bar-motion {
             background: var(--motion);
             height: 100%;
@@ -1572,7 +1601,7 @@ STATS_TEMPLATE = """
     {% if stats.top_species %}
     <h2>Most identified species</h2>
     <div class="subtitle">
-        Based on AI classification of bird pictures (iNaturalist model).
+        Based on AI classification of bird pictures (iNaturalist model). Faded bars and "+N ?" are probable identifications (confidence 0.3 to 0.6).
     </div>
 
     <section class="chart">
@@ -1585,9 +1614,10 @@ STATS_TEMPLATE = """
             </div>
             <div class="bar-species-line">
                 <div class="bar-track">
-                    <div class="bar-bird" style="width: {{ (sp.count / stats.max_species_count * 100) | round(1) }}%"></div>
+                    <div class="bar-bird" style="width: {{ (sp.sure / stats.max_species_count * 100) | round(1) }}%"></div>
+                    <div class="bar-bird probable" style="width: {{ (sp.probable / stats.max_species_count * 100) | round(1) }}%"></div>
                 </div>
-                <div class="bar-value">{{ sp.count }}</div>
+                <div class="bar-value">{{ sp.sure }}{% if sp.probable %} +{{ sp.probable }} ?{% endif %}</div>
             </div>
         </div>
         {% endfor %}
@@ -1861,15 +1891,7 @@ def build_status(all_images):
     used_percent = (disk.used / disk.total) * 100
 
     # Top espèces : compter les species uniques sur les photos bird_
-    species_counts = {}
-    for image in all_images:
-        if image["kind"] == "bird" and image.get("species"):
-            sp = image["species"]
-            species_counts[sp] = species_counts.get(sp, 0) + 1
-    top_species = [
-        {"name": sp, "count": n, "french": french_name(sp)}
-        for sp, n in sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-    ]
+    top_species = rank_species(all_images, 5)
 
     return {
         "birdcam_service": service_status("birdcam"),
@@ -1977,15 +1999,7 @@ def build_stats(all_images):
 
     editorial_summary = f"{hour_sentence} {day_sentence} Today, the feeder has produced {today_bird} bird picture(s)."
 
-    species_counts = {}
-    for image in all_images:
-        if image["kind"] == "bird" and image.get("species"):
-            sp = image["species"]
-            species_counts[sp] = species_counts.get(sp, 0) + 1
-    top_species = [
-        {"name": sp, "count": n, "french": french_name(sp)}
-        for sp, n in sorted(species_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-    ]
+    top_species = rank_species(all_images, 10)
     max_species_count = top_species[0]["count"] if top_species else 1
 
     return {
@@ -2323,9 +2337,13 @@ def clear_species_tag(path: Path):
     new_stem = re.sub(r"_sp[a-zA-Z0-9_-]+?_spconf[0-9.]+$", "", path.stem)
     if new_stem == path.stem:
         return
+    old_match = re.search(r"_sp([a-zA-Z0-9_-]+?)_spconf", path.name)
+    was = old_match.group(1).replace("_", " ").title() if old_match else ""
     new_path = make_unique_path(path.parent / (new_stem + path.suffix))
     delete_thumbnail(path.name)
     path.rename(new_path)
+    # now="" : espèce retirée à la main, retag_history.py ne la remettra pas.
+    append_correction(new_path.name, was, "")
 
 
 @app.route("/clear_species/<path:filename>", methods=["POST"])

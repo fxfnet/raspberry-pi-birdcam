@@ -260,6 +260,21 @@ def main():
             if not already_tagged(f.name)
         )
 
+    # Espèces retirées à la main dans l'admin (corrections.json, now="") :
+    # ne pas les réétiqueter.
+    corrections_path = BASE_DIR / "corrections.json"
+    cleared = set()
+    if corrections_path.exists():
+        try:
+            # Sans le préfixe star_ : mettre/retirer l'étoile renomme le fichier.
+            cleared = {
+                c["image"].removeprefix("star_")
+                for c in json.loads(corrections_path.read_text()) if not c.get("now")
+            }
+        except (ValueError, KeyError, TypeError):
+            print(f"corrections.json illisible, ignoré : {corrections_path}")
+    files = [f for f in files if f.name.removeprefix("star_") not in cleared]
+
     print(f"{len(files)} fichiers à traiter.\n")
 
     tagged = skipped = errors = unchanged = 0
