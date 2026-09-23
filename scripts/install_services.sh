@@ -6,19 +6,19 @@ USER_NAME="$(whoami)"
 
 echo "Installing systemd services for user: ${USER_NAME}"
 
-sed "s/User=fx/User=${USER_NAME}/g; s|/home/fx|${HOME}|g" \
+sed "s/^User=.*/User=${USER_NAME}/; s|/home/fxf/|${HOME}/|g" \
   "${PROJECT_DIR}/systemd/birdcam.service" \
   | sudo tee /etc/systemd/system/birdcam.service >/dev/null
 
-sed "s/User=fx/User=${USER_NAME}/g; s|/home/fx|${HOME}|g" \
+sed "s/^User=.*/User=${USER_NAME}/; s|/home/fxf/|${HOME}/|g" \
   "${PROJECT_DIR}/systemd/birdcam-gallery.service" \
   | sudo tee /etc/systemd/system/birdcam-gallery.service >/dev/null
 
-sed "s/User=fx/User=${USER_NAME}/g; s|/home/fx|${HOME}|g" \
+sed "s/^User=.*/User=${USER_NAME}/; s|/home/fxf/|${HOME}/|g" \
   "${PROJECT_DIR}/systemd/birdcam-gallery-admin.service" \
   | sudo tee /etc/systemd/system/birdcam-gallery-admin.service >/dev/null
 
-sed "s/User=fx/User=${USER_NAME}/g; s|/home/fx|${HOME}|g" \
+sed "s/^User=.*/User=${USER_NAME}/; s|/home/fxf/|${HOME}/|g" \
   "${PROJECT_DIR}/systemd/birdcam-purge.service" \
   | sudo tee /etc/systemd/system/birdcam-purge.service >/dev/null
 
