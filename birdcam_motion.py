@@ -246,12 +246,15 @@ def detect_bird(rgb_frame):
         best_score: float
         bird_bbox: np.ndarray | None — [xmin, ymin, xmax, ymax] normalisé [0,1]
                    du meilleur détection "bird", ou None si aucun oiseau.
+        bird_score: float — confiance de la meilleure détection "bird" (0.0 si aucune).
     """
 
-    bgr_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
-
+    # rgb_frame est en réalité en BGR malgré son nom : Picamera2 configuré en
+    # "RGB888" sort les canaux dans cet ordre (voir save_rgb_jpeg). C'est
+    # justement l'ordre attendu par ce modèle Caffe, donc aucune conversion
+    # n'est nécessaire ici.
     blob = cv2.dnn.blobFromImage(
-        bgr_frame,
+        rgb_frame,
         scalefactor=0.007843,
         size=(300, 300),
         mean=127.5,
@@ -285,7 +288,7 @@ def detect_bird(rgb_frame):
                 best_bird_score = confidence
                 bird_bbox = detections[0, 0, i, 3:7].copy()
 
-    return bird_detected, best_label, best_score, bird_bbox
+    return bird_detected, best_label, best_score, bird_bbox, best_bird_score
 
 
 def classify_species(rgb_frame, bbox):
@@ -308,12 +311,14 @@ def classify_species(rgb_frame, bbox):
         return None, 0.0
 
     # scalefactor=1.0 : le modèle reçoit [0,255] et normalise en interne.
+    # swapRB=True : crop est en réalité en BGR (voir detect_bird) alors que
+    # le modèle a été entraîné sur des images RGB (chargées via PIL).
     blob = cv2.dnn.blobFromImage(
         crop,
         scalefactor=1.0,
         size=(224, 224),
         mean=(0, 0, 0),
-        swapRB=False,
+        swapRB=True,
     )
     species_net.setInput(blob)
     raw = species_net.forward()[0]
@@ -446,13 +451,16 @@ try:
             # Détection oiseau sur chaque frame (MobileNetSSD, rapide).
             detections = []
             for burst_index, timestamp, burst_frame, temp_filename in temp_files:
-                bd, bl, bs, bbox = detect_bird(burst_frame)
-                detections.append((burst_index, timestamp, burst_frame, temp_filename, bd, bl, bs, bbox))
+                bd, bl, bs, bbox, bird_score = detect_bird(burst_frame)
+                detections.append((burst_index, timestamp, burst_frame, temp_filename, bd, bl, bs, bbox, bird_score))
 
-            # Classify species une seule fois sur la meilleure frame oiseau.
+            # Classify species une seule fois sur la frame où l'oiseau est
+            # détecté avec le plus de confiance (et non sur le meilleur label
+            # toutes classes confondues, qui peut être une fausse détection
+            # "dog"/"bottle" plus confiante que l'oiseau lui-même).
             best = max(
                 (d for d in detections if d[4]),  # bird_detected == True
-                key=lambda d: d[6],               # best_score
+                key=lambda d: d[8],               # bird_score
                 default=None,
             )
             species_label = species_conf = None
@@ -462,7 +470,7 @@ try:
             sp_suffix = f"_sp{species_label}_spconf{species_conf:.2f}" if species_label else ""
 
             # Renommer avec le résultat final.
-            for burst_index, timestamp, _, temp_filename, bd, bl, bs, _ in detections:
+            for burst_index, timestamp, _, temp_filename, bd, bl, bs, _, _ in detections:
                 label_for_filename = safe_label(bl)
                 prefix = "bird" if bd else "motion"
                 final_filename = CAPTURE_DIR / (
