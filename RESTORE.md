@@ -29,9 +29,12 @@ ssh-copy-id -i ~/.ssh/id_ed25519_birdcam.pub fxf@192.168.1.40
 ssh birdcam hostname   # must print oaso
 ```
 
+Tailscale: remove the dead `oaso` machine in the Tailscale admin console
+(Machines) first, otherwise the new one is registered as `oaso-1`.
+
 ## 3. Clone and run the setup script
 
-With the `birdcam-usb` drive plugged in:
+With the `birdcam-usb` drive plugged in (the script stops if it is missing):
 
 ```bash
 ssh -t birdcam
@@ -52,7 +55,7 @@ The script is idempotent and can be re-run. It sets up:
 6. boot to `multi-user.target` (no desktop)
 7. models (`scripts/install_models.sh`)
 8. birdcam services and timers (`scripts/install_services.sh`)
-9. Tailscale, with `--hostname=birdcam` (open the printed link to authorise)
+9. Tailscale, node name `oaso` (open the printed link to authorise)
 
 ## 4. Check
 

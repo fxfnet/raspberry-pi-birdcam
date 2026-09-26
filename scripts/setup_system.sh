@@ -32,13 +32,17 @@ sudo apt-get install -y python3-picamera2 python3-opencv python3-numpy python3-f
 step "2. Clé USB des captures (${USB_LABEL} -> ${USB_MOUNT})"
 USB_DEV="$(sudo blkid -L "${USB_LABEL}" || true)"
 if [ -z "${USB_DEV}" ]; then
-  echo "ATTENTION : aucune partition étiquetée ${USB_LABEL}. Brancher la clé et relancer,"
-  echo "  ou en préparer une neuve : sudo mkfs.ext4 -L ${USB_LABEL} /dev/sdX1"
+  # Sans la clé, la capture écrirait sur la SD et les liens ne seraient plus créés.
+  echo "Aucune partition étiquetée ${USB_LABEL}. Brancher la clé et relancer," >&2
+  echo "  ou en préparer une neuve : sudo mkfs.ext4 -L ${USB_LABEL} /dev/sdX1" >&2
+  exit 1
 else
   sudo mkdir -p "${USB_MOUNT}"
-  if ! grep -q "${USB_MOUNT}" /etc/fstab; then
+  USB_UUID="$(sudo blkid -s UUID -o value "${USB_DEV}")"
+  if ! grep -q "^UUID=${USB_UUID} ${USB_MOUNT} " /etc/fstab; then
+    # Nouvelle clé ou première installation : une seule ligne pour ce point de montage.
     # nofail : le Pi démarre même si la clé est absente.
-    USB_UUID="$(sudo blkid -s UUID -o value "${USB_DEV}")"
+    sudo sed -i "\| ${USB_MOUNT} |d" /etc/fstab
     echo "UUID=${USB_UUID} ${USB_MOUNT} ext4 defaults,nofail 0 2" | sudo tee -a /etc/fstab >/dev/null
     sudo systemctl daemon-reload
   fi
@@ -98,7 +102,13 @@ sudo systemctl set-default multi-user.target
 
 step "7. Modèles"
 # MobileNetSSD se retélécharge ; garden_birds.onnx est versionné dans le dépôt.
-bash "${PROJECT_DIR}/scripts/install_models.sh"
+# Seulement s'il manque : install_models.sh tronque les fichiers avant de
+# télécharger, une relance sans réseau casserait un Pi qui fonctionne.
+if [ -s "${PROJECT_DIR}/model/MobileNetSSD_deploy.caffemodel" ] && [ -s "${PROJECT_DIR}/model/MobileNetSSD_deploy.prototxt" ]; then
+  echo "Modèles déjà présents."
+else
+  bash "${PROJECT_DIR}/scripts/install_models.sh"
+fi
 
 step "8. Services birdcam"
 bash "${PROJECT_DIR}/scripts/install_services.sh"
@@ -110,7 +120,8 @@ if ! command -v tailscale >/dev/null; then
 fi
 if ! tailscale status >/dev/null 2>&1; then
   echo "Ouvrir le lien affiché pour autoriser le Pi dans le tailnet."
-  sudo tailscale up --hostname=birdcam
+  # Nom par défaut = hostname du Pi (oaso), comme le nœud actuel du tailnet.
+  sudo tailscale up
 fi
 
 echo
