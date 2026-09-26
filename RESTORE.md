@@ -86,92 +86,132 @@ Expected: three `active`, `Power save: off`, and the capture count of the USB dr
 ### What the backup is, and what it is not
 
 `scripts/backup_usb.sh` copies the USB drive to macaron every hour with
-`rsync`, **without `--delete`**. It is a mirror that only grows, not a set of
-dated snapshots:
+`rsync`, **without `--delete`**. It is a mirror that only grows, with no
+history:
 
-- **one copy of `corrections.json`**, the one of the last hour. The file is
-  append-only, so this latest copy holds every correction made before it;
+- **one copy of `corrections.json`, and no older version.** Every hour it is
+  replaced by whatever is on the drive, damaged or not. A damage is usually
+  noticed later (the admin fails when saving a correction), so macaron may
+  already hold the damaged file. Only a Time Machine backup of macaron, if
+  there is one, would go further back.
 - **a photo deleted in the admin stays on macaron**: this is what makes a
   deletion recoverable;
-- **a renamed photo exists twice on macaron.** Starring, retagging and
-  correcting the species rename the file; the backup keeps the old name next to
-  the new one. The timestamp in the name (`bird_20260920_143512_417...`)
-  identifies the photo across renames.
-- motion pictures (`motion_*`) are not backed up.
+- **a renamed photo can exist under several names on macaron.** Starring and
+  correcting the species rename the file, and the backup keeps every name: a
+  photo corrected then starred exists three times. A bird photo retagged as
+  motion only keeps its old `bird_` name, since `motion_*` files are not backed
+  up; `star_motion_*` files are.
 
-### 1. Stop the backup first
+Capture names follow
+`bird_<YYYYMMDD_HHMMSS_mmm>_burst<i>_motion<score>_conf<x.xx>_best<label>[_sp<species>_spconf<x.xx>].jpg`,
+possibly prefixed with `star_` and suffixed with `_1`. The timestamp with
+milliseconds identifies a photo across renames.
+
+### 1. Stop the backup, including a run in progress
 
 ```bash
 ssh birdcam
-sudo systemctl stop birdcam-backup.timer
+sudo systemctl stop birdcam-backup.timer birdcam-backup.service
+systemctl is-active birdcam-backup.service   # must print inactive
 ```
 
-If the drive holds a damaged `corrections.json`, the next hourly run would copy
-it over the only good copy on macaron. Stopping the timer comes before anything
-else.
+Stopping the timer alone does not stop an `rsync` already running.
 
 ### 2. Stop what writes to the drive
 
 ```bash
-sudo systemctl stop birdcam birdcam-gallery-admin
+sudo systemctl stop birdcam birdcam-gallery-admin birdcam-restart.timer
 ```
 
-`birdcam` writes captures, the admin renames and deletes photos and appends to
-`corrections.json`. The public gallery only reads and can keep running.
+`birdcam` writes captures; the admin renames and deletes photos and appends to
+`corrections.json`; the restart timer would start `birdcam` again at 03:00. The
+public gallery only reads and can keep running.
 
 ### 3a. Bring back a deleted photo
 
-Find it on macaron by its timestamp, and make sure it is not still on the drive
-under another name:
+Search by the full timestamp, on macaron and on the drive:
 
 ```bash
-ssh -i ~/.ssh/id_ed25519_backup macaron@192.168.1.177 'ls birdcam_backups/captures/ | grep 20260920_1435'
-ls /mnt/birdcam-usb/captures/ | grep 20260920_1435
+ssh -i ~/.ssh/id_ed25519_backup macaron@192.168.1.177 'ls birdcam_backups/captures/ | grep 20260920_143512_417'
+ls /mnt/birdcam-usb/captures/ | grep 20260920_143512_417
 ```
 
-If the drive has nothing with that timestamp, copy the file back:
+If the drive still has that timestamp under another name, the photo was renamed,
+not deleted: restore nothing. Otherwise copy the name listed on macaron. If
+several names come up, take the last state of the photo: the `star_` one if it
+was starred, the `_spconf1.00` one if its species was corrected by hand. File
+dates cannot tell them apart, since renaming and `rsync -a` both keep them.
 
 ```bash
-rsync -a --ignore-existing -e "ssh -i ~/.ssh/id_ed25519_backup"   macaron@192.168.1.177:birdcam_backups/captures/bird_20260920_143512_417.jpg   /mnt/birdcam-usb/captures/
+rsync -a --ignore-existing -e "ssh -i ~/.ssh/id_ed25519_backup" \
+  'macaron@192.168.1.177:birdcam_backups/captures/<exact name from the list>' \
+  /mnt/birdcam-usb/captures/
 ```
 
 Restore photo by photo. A bulk `rsync` of the whole `captures/` folder would
-also bring back the old name of every renamed photo, and they would show up
-twice in the gallery.
+bring back every old name, and the gallery would show duplicates.
 
 ### 3b. Bring back `corrections.json`
 
+Fetch and check the macaron copy **before** touching the one on the drive:
+
+```bash
+rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" \
+  macaron@192.168.1.177:birdcam_backups/corrections.json /tmp/corrections.json
+python3 -c "import json; d = json.load(open('/tmp/corrections.json')); print(len(d), 'entries, last', d[-1]['corrected_at'] if d else '-')"
+```
+
+If this fails, or shows fewer entries or an older last date than expected, the
+macaron copy is damaged too: stop here, keep the backup timer stopped, and look
+for an older version in Time Machine on macaron.
+
+If the copy is good, set the drive's file aside and put the copy in place:
+
 ```bash
 mv /mnt/birdcam-usb/corrections.json /mnt/birdcam-usb/corrections.json.$(date +%F_%H%M).bak
-rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup"   macaron@192.168.1.177:birdcam_backups/corrections.json /mnt/birdcam-usb/
-python3 -m json.tool /mnt/birdcam-usb/corrections.json > /dev/null && echo valid
+cp /tmp/corrections.json /mnt/birdcam-usb/corrections.json
 ```
 
 Write to `/mnt/birdcam-usb/corrections.json`, never to `~/birdcam/corrections.json`:
 the latter is a symlink to the drive, and replacing it would leave the gallery
-writing to the SD card. Corrections made in the admin after the last backup are
-lost; the damaged file set aside keeps them if they can be read.
+writing to the SD card. Corrections made after the last backup are lost; the
+file set aside keeps them if it can still be read.
 
 ### 4. Restart
 
 ```bash
-sudo systemctl start birdcam birdcam-gallery-admin birdcam-backup.timer
-systemctl is-active birdcam birdcam-gallery birdcam-gallery-admin birdcam-backup.timer
+sudo systemctl start birdcam birdcam-gallery-admin birdcam-restart.timer birdcam-backup.timer
+systemctl is-active birdcam birdcam-gallery birdcam-gallery-admin birdcam-restart.timer birdcam-backup.timer
 ```
 
-Expected: four `active`.
+Expected: five `active`.
 
 ## If the USB drive is lost too
 
-Format a new drive (`sudo mkfs.ext4 -L birdcam-usb /dev/sdX1`), run the setup
-script, then copy the backup back from macaron:
+**Order matters.** `setup_system.sh` writes an empty `[]` `corrections.json` on
+a new drive and enables the hourly backup, which then replaces the full file on
+macaron with that empty one, within minutes of the setup.
 
-```bash
-ssh birdcam 'rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" macaron@192.168.1.177:birdcam_backups/ /mnt/birdcam-usb/'
-```
+1. On macaron, before anything else, keep a dated copy of the file:
 
-This bulk copy also brings back every photo deleted in the admin, and the old
-name of every renamed photo (see "What the backup is" above): expect duplicates
-in the gallery, to clean up in the admin. Motion pictures are not in the backup.
+   ```bash
+   cp -p ~/birdcam_backups/corrections.json ~/birdcam_backups/corrections.json.$(date +%F_%H%M)
+   ```
 
-Motion pictures are not backed up; they are purged after 14 days anyway.
+2. Format a new drive (`sudo mkfs.ext4 -L birdcam-usb /dev/sdX1`) and run the
+   setup script.
+
+3. Copy the photos back, then the dated `corrections.json` from step 1:
+
+   ```bash
+   ssh birdcam
+   rsync -a --exclude='corrections.json*' -e "ssh -i ~/.ssh/id_ed25519_backup" \
+     macaron@192.168.1.177:birdcam_backups/ /mnt/birdcam-usb/
+   rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" \
+     'macaron@192.168.1.177:birdcam_backups/corrections.json.<date from step 1>' \
+     /mnt/birdcam-usb/corrections.json
+   ```
+
+This bulk copy also brings back every photo deleted in the admin and every old
+name of renamed photos: expect duplicates in the gallery, to clean up in the
+admin. Motion pictures are not backed up; they are purged after 14 days anyway.
