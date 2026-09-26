@@ -89,11 +89,11 @@ Expected: three `active`, `Power save: off`, and the capture count of the USB dr
 `rsync`, **without `--delete`**. It is a mirror that only grows, with no
 history:
 
-- **one copy of `corrections.json`, and no older version.** Every hour it is
-  replaced by whatever is on the drive, damaged or not. A damage is usually
-  noticed later (the admin fails when saving a correction), so macaron may
-  already hold the damaged file. Only a Time Machine backup of macaron, if
-  there is one, would go further back.
+- **`corrections.json` plus one dated copy per day.** Each hour the file is
+  pushed only if it parses as JSON, so a damaged file never replaces the copy on
+  macaron. It is also copied to `corrections_YYYY-MM-DD.json`, one file per day,
+  kept forever: a file that is valid but emptied (a new drive starts with `[]`)
+  still leaves the previous days intact.
 - **a photo deleted in the admin stays on macaron**: this is what makes a
   deletion recoverable;
 - **a renamed photo can exist under several names on macaron.** Starring and
@@ -161,9 +161,16 @@ rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" \
 python3 -c "import json; d = json.load(open('/tmp/corrections.json')); print(len(d), 'entries, last', d[-1]['corrected_at'] if d else '-')"
 ```
 
-If this fails, or shows fewer entries or an older last date than expected, the
-macaron copy is damaged too: stop here, keep the backup timer stopped, and look
-for an older version in Time Machine on macaron.
+If this shows fewer entries or an older last date than expected, take the
+latest good daily copy instead:
+
+```bash
+ssh -i ~/.ssh/id_ed25519_backup macaron@192.168.1.177 'ls birdcam_backups/ | grep corrections_'
+rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" \
+  'macaron@192.168.1.177:birdcam_backups/corrections_<YYYY-MM-DD>.json' /tmp/corrections.json
+```
+
+and check it the same way.
 
 If the copy is good, set the drive's file aside and put the copy in place:
 
@@ -190,7 +197,8 @@ Expected: five `active`.
 
 **Order matters.** `setup_system.sh` writes an empty `[]` `corrections.json` on
 a new drive and enables the hourly backup, which then replaces the full file on
-macaron with that empty one, within minutes of the setup.
+macaron with that empty one, within minutes of the setup. The daily copies of
+the previous days are not touched, but today's is.
 
 1. On macaron, before anything else, keep a dated copy of the file:
 
@@ -205,7 +213,7 @@ macaron with that empty one, within minutes of the setup.
 
    ```bash
    ssh birdcam
-   rsync -a --exclude='corrections.json*' -e "ssh -i ~/.ssh/id_ed25519_backup" \
+   rsync -a --exclude='corrections*' -e "ssh -i ~/.ssh/id_ed25519_backup" \
      macaron@192.168.1.177:birdcam_backups/ /mnt/birdcam-usb/
    rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" \
      'macaron@192.168.1.177:birdcam_backups/corrections.json.<date from step 1>' \
