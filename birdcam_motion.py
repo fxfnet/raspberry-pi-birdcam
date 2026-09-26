@@ -58,8 +58,10 @@ MOTION_SIZE = (640, 480)
 LOOP_DELAY_SECONDS = 0.03
 WARMUP_SECONDS = 2.0
 
-# Keep a few recent frames in memory.
-FRAME_BUFFER_SIZE = 30
+# Keep a few recent frames in memory. Each 1280x960 frame is ~3.7 MB: 30 frames
+# held ~110 MB on a 905 MB Pi 3B while only the last one is used. 5 still
+# allows FRAME_TO_SAVE_FROM_BUFFER down to -5.
+FRAME_BUFFER_SIZE = 5
 
 # Use the latest frame when movement is detected.
 # Earlier values like -4 can save a frame before the bird is visible.
