@@ -14,6 +14,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Galerie web et admin | `gallery/app.py` |
 | Services et minuteries (capture, galerie, admin, purge, redémarrage nocturne) | `systemd/` |
 | Installation sur le Pi | `scripts/install_services.sh`, `scripts/install_models.sh` |
+| Reconstruction après panne de carte SD | `RESTORE.md`, `scripts/setup_system.sh` |
 | Entraînement du modèle d'espèces | `training/` (le dataset n'est pas versionné) |
 | Documentation utilisateur | `README.md` |
 
