@@ -8,6 +8,12 @@ Prérequis :
 Usage :
     python3 training/train.py --data dataset/ --epochs 30
     python3 training/train.py --data dataset/ --epochs 5 --quick   # test rapide
+
+    # Affinage du modèle existant avec les captures corrigées (cap_*.jpg,
+    # voir training/export_captures.py), suréchantillonnées :
+    python3 training/train.py --data dataset/ --epochs 8 \
+        --init training/model_best.pth --capture-weight 10 \
+        --out training/model_captures.pth
 """
 
 import argparse
@@ -17,7 +23,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, WeightedRandomSampler, random_split
 from torchvision import datasets, transforms
 from tqdm import tqdm
 
@@ -109,6 +115,9 @@ def main():
     parser.add_argument("--epochs",  type=int, default=30)
     parser.add_argument("--out",     default="training/model_best.pth")
     parser.add_argument("--quick",   action="store_true", help="5 epochs, debug")
+    parser.add_argument("--init",    help="Repartir de ce checkpoint (.pth) au lieu d'ImageNet")
+    parser.add_argument("--capture-weight", type=float, default=1.0,
+                        help="Poids d'échantillonnage des captures cap_*.jpg (défaut 1)")
     args = parser.parse_args()
 
     if args.quick:
@@ -129,7 +138,18 @@ def main():
     # Appliquer les transformations val sur le sous-ensemble de validation
     val_ds.dataset = datasets.ImageFolder(args.data, transform=val_tf)
 
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=2)
+    if args.capture_weight != 1.0:
+        # Les captures corrigées sont rares face au dataset : on les tire plus souvent.
+        weights = [
+            args.capture_weight if Path(full_ds.samples[i][0]).name.startswith("cap_") else 1.0
+            for i in train_ds.indices
+        ]
+        n_cap = sum(w != 1.0 for w in weights)
+        print(f"{n_cap} captures cap_*.jpg dans le train, poids {args.capture_weight}")
+        sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
+        train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, sampler=sampler, num_workers=2)
+    else:
+        train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=2)
     val_loader   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
     classes = full_ds.classes
@@ -142,7 +162,13 @@ def main():
     Path(args.out).with_suffix(".json").write_text(json.dumps(mapping, indent=2))
 
     # ── Modèle ───────────────────────────────────────────────────────────────
-    model = timm.create_model("efficientnet_b0", pretrained=True, num_classes=n_cls)
+    model = timm.create_model("efficientnet_b0", pretrained=not args.init, num_classes=n_cls)
+    if args.init:
+        checkpoint = torch.load(args.init, map_location="cpu")
+        if list(checkpoint["classes"]) != list(classes):
+            raise SystemExit(f"Classes différentes entre {args.init} et {args.data}")
+        model.load_state_dict(checkpoint["model"])
+        print(f"Poids initiaux : {args.init}")
     model = model.to(device)
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
