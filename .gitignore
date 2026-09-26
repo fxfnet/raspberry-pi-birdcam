@@ -38,6 +38,7 @@ camera_test.json
 gallery/thumbs
 
 # Training dataset and intermediate checkpoint (only the final garden_birds.onnx is versioned)
+# training/model_captures.pth is versioned: base checkpoint for the next fine-tune (train.py --init)
 dataset/
 training/model_best.pth
 training/model_best.json
