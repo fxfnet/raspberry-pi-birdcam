@@ -7,7 +7,8 @@ What survives an SD card failure:
 | Code, systemd units, scripts | GitHub | yes |
 | Species model (`model/garden_birds.onnx`), fine-tune checkpoint | GitHub | yes |
 | MobileNetSSD detector | re-downloaded by `scripts/install_models.sh` | yes |
-| Captures and `corrections.json` | USB drive labelled `birdcam-usb` | yes (no copy of the drive itself) |
+| Captures and `corrections.json` | USB drive labelled `birdcam-usb` | yes |
+| Bird pictures and `corrections.json` (not motion pictures) | copied hourly to macaron, `~/birdcam_backups/` | yes, even if the USB drive dies |
 | System configuration (below) | SD card only | rebuilt by `scripts/setup_system.sh` |
 
 ## 1. Flash a new card
@@ -50,12 +51,16 @@ The script is idempotent and can be re-run. It sets up:
    `corrections.json` symlinks into `~/birdcam`
 3. passwordless sudo limited to `systemctl` and `journalctl`
    (`/etc/sudoers.d/birdcam-fxf`, validated with `visudo -c`)
-4. persistent journald logs (masks Raspberry Pi OS' volatile default)
+4. persistent journald logs capped at 100 MB (masks Raspberry Pi OS' volatile
+   default; uncapped, the journal grows without limit and wears the card)
 5. Wi-Fi power save off (it made SSH and the gallery intermittently unreachable)
 6. boot to `multi-user.target` (no desktop)
 7. models (`scripts/install_models.sh`)
-8. birdcam services and timers (`scripts/install_services.sh`)
-9. Tailscale, node name `oaso` (open the printed link to authorise)
+8. the backup key `~/.ssh/id_ed25519_backup`; if macaron refuses it, the script
+   prints the public key to add to `~/.ssh/authorized_keys` on macaron
+9. birdcam services and timers (`scripts/install_services.sh`), including the
+   hourly backup to macaron
+10. Tailscale, node name `oaso` (open the printed link to authorise)
 
 ## 4. Check
 
@@ -64,3 +69,14 @@ ssh birdcam 'systemctl is-active birdcam birdcam-gallery birdcam-gallery-admin; 
 ```
 
 Expected: three `active`, `Power save: off`, and the capture count of the USB drive.
+
+## If the USB drive is lost too
+
+Format a new drive (`sudo mkfs.ext4 -L birdcam-usb /dev/sdX1`), run the setup
+script, then copy the backup back from macaron:
+
+```bash
+ssh birdcam 'rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" macaron@192.168.1.177:birdcam_backups/ /mnt/birdcam-usb/'
+```
+
+Motion pictures are not backed up; they are purged after 14 days anyway.

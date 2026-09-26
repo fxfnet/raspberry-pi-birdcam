@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly Birdcam Backup
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

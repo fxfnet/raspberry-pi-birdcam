@@ -27,9 +27,14 @@ sed "s/^User=.*/User=${USER_NAME}/; s|/home/fxf/|${HOME}/|g" \
   "${PROJECT_DIR}/systemd/birdcam-purge.service" \
   | sudo tee /etc/systemd/system/birdcam-purge.service >/dev/null
 
+sed "s/^User=.*/User=${USER_NAME}/; s|/home/fxf/|${HOME}/|g" \
+  "${PROJECT_DIR}/systemd/birdcam-backup.service" \
+  | sudo tee /etc/systemd/system/birdcam-backup.service >/dev/null
+
 sudo cp "${PROJECT_DIR}/systemd/birdcam-purge.timer" /etc/systemd/system/birdcam-purge.timer
 sudo cp "${PROJECT_DIR}/systemd/birdcam-restart.service" /etc/systemd/system/birdcam-restart.service
 sudo cp "${PROJECT_DIR}/systemd/birdcam-restart.timer" /etc/systemd/system/birdcam-restart.timer
+sudo cp "${PROJECT_DIR}/systemd/birdcam-backup.timer" /etc/systemd/system/birdcam-backup.timer
 
 sudo systemctl daemon-reload
 
@@ -39,6 +44,7 @@ sudo systemctl enable birdcam-gallery-admin
 
 sudo systemctl enable --now birdcam-purge.timer
 sudo systemctl enable --now birdcam-restart.timer
+sudo systemctl enable --now birdcam-backup.timer
 
 echo "Services installed and enabled."
 echo
@@ -49,3 +55,4 @@ echo "  sudo systemctl start birdcam-gallery-admin"
 echo
 echo "birdcam-purge.timer is enabled and started (daily purge of old motion pictures)."
 echo "birdcam-restart.timer is enabled and started (nightly 03:00 restart of birdcam)."
+echo "birdcam-backup.timer is enabled and started (hourly copy of bird pictures to macaron)."

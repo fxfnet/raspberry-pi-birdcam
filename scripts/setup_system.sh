@@ -17,6 +17,8 @@ PROJECT_DIR="${HOME}/birdcam"
 USER_NAME="$(whoami)"
 USB_LABEL="birdcam-usb"
 USB_MOUNT="/mnt/birdcam-usb"
+BACKUP_HOST_IP="192.168.1.177"
+BACKUP_KEY="${HOME}/.ssh/id_ed25519_backup"
 
 if [ ! -d "${PROJECT_DIR}/.git" ]; then
   echo "Dépôt absent : git clone https://github.com/fxfnet/raspberry-pi-birdcam.git ${PROJECT_DIR}" >&2
@@ -79,11 +81,13 @@ sudo visudo -cf "${SUDOERS_TMP}"
 sudo install -m 0440 -o root -g root "${SUDOERS_TMP}" /etc/sudoers.d/birdcam-fxf
 rm -f "${SUDOERS_TMP}"
 
-step "4. Journaux persistants"
+step "4. Journaux persistants, plafonnés à 100 Mo"
 # Raspberry Pi OS force Storage=volatile via un fichier du même nom dans
 # /usr/lib/systemd/journald.conf.d ; celui de /etc le masque.
+# Sans plafond, le journal persistant grossit sans fin et use la carte SD
+# (725 Mo constatés sur le Pi Spirucontrol).
 sudo mkdir -p /etc/systemd/journald.conf.d
-printf '[Journal]\nStorage=persistent\n' | sudo tee /etc/systemd/journald.conf.d/40-rpi-volatile-storage.conf >/dev/null
+printf '[Journal]\nStorage=persistent\nSystemMaxUse=100M\n' | sudo tee /etc/systemd/journald.conf.d/40-rpi-volatile-storage.conf >/dev/null
 sudo systemctl restart systemd-journald
 sudo journalctl --flush
 
@@ -110,11 +114,29 @@ else
   bash "${PROJECT_DIR}/scripts/install_models.sh"
 fi
 
-step "8. Services birdcam"
+step "8. Clé de sauvegarde vers macaron"
+if [ ! -f "${BACKUP_KEY}" ]; then
+  # Sans phrase de passe : elle sert à un envoi automatique, et ne donne accès
+  # qu'au compte macaron.
+  ssh-keygen -t ed25519 -N '' -C "birdcam-backup" -f "${BACKUP_KEY}"
+fi
+if ! ssh-keygen -F "${BACKUP_HOST_IP}" >/dev/null; then
+  # Sans l'empreinte de macaron, le premier rsync non interactif échouerait.
+  ssh-keyscan -t ed25519 "${BACKUP_HOST_IP}" >> "${HOME}/.ssh/known_hosts" 2>/dev/null || true
+fi
+if ssh -i "${BACKUP_KEY}" -o BatchMode=yes -o ConnectTimeout=10 "macaron@${BACKUP_HOST_IP}" true 2>/dev/null; then
+  echo "macaron accepte la clé de sauvegarde."
+else
+  echo "ATTENTION : macaron refuse encore la clé. Ajouter cette ligne à"
+  echo "  ~/.ssh/authorized_keys sur macaron (et retirer l'ancienne clé birdcam-backup) :"
+  cat "${BACKUP_KEY}.pub"
+fi
+
+step "9. Services birdcam"
 bash "${PROJECT_DIR}/scripts/install_services.sh"
 sudo systemctl start birdcam birdcam-gallery birdcam-gallery-admin
 
-step "9. Tailscale (accès hors du réseau local)"
+step "10. Tailscale (accès hors du réseau local)"
 if ! command -v tailscale >/dev/null; then
   curl -fsSL https://tailscale.com/install.sh | sh
 fi

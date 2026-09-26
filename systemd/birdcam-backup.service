@@ -1,0 +1,9 @@
+[Unit]
+Description=Birdcam Backup USB Drive to macaron
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=fxf
+ExecStart=/home/fxf/birdcam/scripts/backup_usb.sh
