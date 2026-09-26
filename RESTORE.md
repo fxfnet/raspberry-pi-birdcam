@@ -86,14 +86,17 @@ Expected: three `active`, `Power save: off`, and the capture count of the USB dr
 ### What the backup is, and what it is not
 
 `scripts/backup_usb.sh` copies the USB drive to macaron every hour with
-`rsync`, **without `--delete`**. It is a mirror that only grows, with no
-history:
+`rsync`, **without `--delete`**. Photos form a mirror that only grows;
+`corrections.json` also gets one dated copy per day:
 
 - **`corrections.json` plus one dated copy per day.** Each hour the file is
-  pushed only if it parses as JSON, so a damaged file never replaces the copy on
-  macaron. It is also copied to `corrections_YYYY-MM-DD.json`, one file per day,
-  kept forever: a file that is valid but emptied (a new drive starts with `[]`)
-  still leaves the previous days intact.
+  pushed only if it is a readable JSON list with at least as many entries as at
+  the last successful push (the count is kept on the Pi in
+  `~/.local/state/birdcam/corrections_count`). A damaged or shortened file never
+  replaces the copy on macaron; the run then exits with code 3. The file is also
+  copied to `corrections_YYYY-MM-DD.json`, one per day, kept forever. Today's
+  copy has the same content as `corrections.json`; to go back, take a previous
+  day.
 - **a photo deleted in the admin stays on macaron**: this is what makes a
   deletion recoverable;
 - **a renamed photo can exist under several names on macaron.** Starring and
@@ -170,7 +173,13 @@ rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" \
   'macaron@192.168.1.177:birdcam_backups/corrections_<YYYY-MM-DD>.json' /tmp/corrections.json
 ```
 
-and check it the same way.
+and check it the same way. Because this version is shorter than the last one
+pushed, the backup will refuse it until the Pi forgets the old count; do this
+before step 4:
+
+```bash
+rm ~/.local/state/birdcam/corrections_count
+```
 
 If the copy is good, set the drive's file aside and put the copy in place:
 
@@ -196,9 +205,10 @@ Expected: five `active`.
 ## If the USB drive is lost too
 
 **Order matters.** `setup_system.sh` writes an empty `[]` `corrections.json` on
-a new drive and enables the hourly backup, which then replaces the full file on
-macaron with that empty one, within minutes of the setup. The daily copies of
-the previous days are not touched, but today's is.
+a new drive and enables the hourly backup. If the SD card survived, the backup
+refuses this shorter file. If the SD card was lost too, the Pi no longer knows
+the previous count, and the backup replaces the full file on macaron, and
+today's daily copy, with `[]` within minutes. The previous days are not touched.
 
 1. On macaron, before anything else, keep a dated copy of the file:
 
@@ -218,7 +228,11 @@ the previous days are not touched, but today's is.
    rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" \
      'macaron@192.168.1.177:birdcam_backups/corrections.json.<date from step 1>' \
      /mnt/birdcam-usb/corrections.json
+   rm -f ~/.local/state/birdcam/corrections_count
    ```
+
+   If step 1 came too late and the dated copy is already `[]`, take
+   `corrections_<yesterday>.json` instead: only today's corrections are lost.
 
 This bulk copy also brings back every photo deleted in the admin and every old
 name of renamed photos: expect duplicates in the gallery, to clean up in the
