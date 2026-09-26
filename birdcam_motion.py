@@ -195,6 +195,11 @@ def safe_label(label: str) -> str:
 def atomic_rename(src: Path, dst: Path):
     os.replace(str(src), str(dst))
 
+# Gains couleur (R, G, B) déduits de la mire ColorChecker, appliqués aux JPEG
+# enregistrés et au cadre de l'oiseau avant le classifieur d'espèces.
+COLOR_GAINS_RGB = np.array((0.831, 0.883, 0.754), dtype=np.float32)
+
+
 def save_rgb_jpeg(rgb_frame, filename: Path):
     """
     Save camera frame as JPEG with corrected colors.
@@ -204,13 +209,11 @@ def save_rgb_jpeg(rgb_frame, filename: Path):
     - gains RGB simples issus de la comparaison avec le PDF ColorChecker.
     """
 
-    color_gains = np.array((0.831, 0.883, 0.754), dtype=np.float32)
-
     # Correction principale : swap rouge / bleu.
     corrected_rgb = rgb_frame[:, :, [2, 1, 0]].astype(np.float32)
 
     # Correction secondaire : gains par canal.
-    corrected_rgb = corrected_rgb * color_gains
+    corrected_rgb = corrected_rgb * COLOR_GAINS_RGB
 
     corrected_rgb = np.clip(corrected_rgb, 0, 255).astype(np.uint8)
 
@@ -318,6 +321,10 @@ def classify_species(rgb_frame, bbox):
     crop = rgb_frame[y1:y2, x1:x2]
     if crop.size == 0:
         return None, 0.0
+
+    # Mêmes couleurs que le JPEG enregistré : la frame est en BGR, d'où les
+    # gains dans l'ordre inverse. Le modèle a appris sur des couleurs naturelles.
+    crop = np.clip(crop * COLOR_GAINS_RGB[::-1], 0, 255).astype(np.uint8)
 
     # scalefactor=1.0 : le modèle reçoit [0,255] et normalise en interne.
     # swapRB=True : crop est en réalité en BGR (voir detect_bird) alors que

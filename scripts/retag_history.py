@@ -294,6 +294,9 @@ def main():
 
         raw = np.clip(img_bgr / JPEG_GAINS_BGR, 0, 255).astype(np.uint8)
         crop = find_bird_crop(detector, raw)
+        if crop is not None:
+            # Comme classify_species() : gains couleur réappliqués au cadre.
+            crop = np.clip(crop * JPEG_GAINS_BGR, 0, 255).astype(np.uint8)
         species, score = classify(net, labels, crop) if crop is not None else (None, 0.0)
 
         # Construire le nouveau nom en retirant l'ancien suffixe espèce
