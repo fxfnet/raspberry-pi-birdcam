@@ -15,7 +15,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Services et minuteries (capture, galerie, admin, purge, redémarrage nocturne) | `systemd/` |
 | Installation sur le Pi | `scripts/install_services.sh`, `scripts/install_models.sh` |
 | Sauvegarde horaire des photos d'oiseaux vers macaron | `scripts/backup_usb.sh`, `systemd/birdcam-backup.*` |
-| Reconstruction après panne de carte SD | `RESTORE.md`, `scripts/setup_system.sh` |
+| Reconstruction après panne de carte SD, restauration d'une photo ou de `corrections.json` depuis macaron | `RESTORE.md`, `scripts/setup_system.sh` |
 | Entraînement du modèle d'espèces | `training/` (le dataset n'est pas versionné) |
 | Documentation utilisateur | `README.md` |
 

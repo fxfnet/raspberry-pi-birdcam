@@ -1,4 +1,15 @@
-# Restoring the birdcam Pi after an SD card failure
+# Restoring the birdcam Pi or its data
+
+Two situations:
+
+- **the SD card died**: sections 1 to 4 below;
+- **the Pi runs and some data must come back from macaron** (a photo deleted
+  by mistake, a damaged `corrections.json`, a lost USB drive): section
+  "Restoring from the macaron backup while the Pi is running".
+
+The backup lives on macaron in `/Users/macaron/birdcam_backups/`
+(`captures/` and `corrections.json`).
+
 
 What survives an SD card failure:
 
@@ -70,6 +81,86 @@ ssh birdcam 'systemctl is-active birdcam birdcam-gallery birdcam-gallery-admin; 
 
 Expected: three `active`, `Power save: off`, and the capture count of the USB drive.
 
+## Restoring from the macaron backup while the Pi is running
+
+### What the backup is, and what it is not
+
+`scripts/backup_usb.sh` copies the USB drive to macaron every hour with
+`rsync`, **without `--delete`**. It is a mirror that only grows, not a set of
+dated snapshots:
+
+- **one copy of `corrections.json`**, the one of the last hour. The file is
+  append-only, so this latest copy holds every correction made before it;
+- **a photo deleted in the admin stays on macaron**: this is what makes a
+  deletion recoverable;
+- **a renamed photo exists twice on macaron.** Starring, retagging and
+  correcting the species rename the file; the backup keeps the old name next to
+  the new one. The timestamp in the name (`bird_20260920_143512_417...`)
+  identifies the photo across renames.
+- motion pictures (`motion_*`) are not backed up.
+
+### 1. Stop the backup first
+
+```bash
+ssh birdcam
+sudo systemctl stop birdcam-backup.timer
+```
+
+If the drive holds a damaged `corrections.json`, the next hourly run would copy
+it over the only good copy on macaron. Stopping the timer comes before anything
+else.
+
+### 2. Stop what writes to the drive
+
+```bash
+sudo systemctl stop birdcam birdcam-gallery-admin
+```
+
+`birdcam` writes captures, the admin renames and deletes photos and appends to
+`corrections.json`. The public gallery only reads and can keep running.
+
+### 3a. Bring back a deleted photo
+
+Find it on macaron by its timestamp, and make sure it is not still on the drive
+under another name:
+
+```bash
+ssh -i ~/.ssh/id_ed25519_backup macaron@192.168.1.177 'ls birdcam_backups/captures/ | grep 20260920_1435'
+ls /mnt/birdcam-usb/captures/ | grep 20260920_1435
+```
+
+If the drive has nothing with that timestamp, copy the file back:
+
+```bash
+rsync -a --ignore-existing -e "ssh -i ~/.ssh/id_ed25519_backup"   macaron@192.168.1.177:birdcam_backups/captures/bird_20260920_143512_417.jpg   /mnt/birdcam-usb/captures/
+```
+
+Restore photo by photo. A bulk `rsync` of the whole `captures/` folder would
+also bring back the old name of every renamed photo, and they would show up
+twice in the gallery.
+
+### 3b. Bring back `corrections.json`
+
+```bash
+mv /mnt/birdcam-usb/corrections.json /mnt/birdcam-usb/corrections.json.$(date +%F_%H%M).bak
+rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup"   macaron@192.168.1.177:birdcam_backups/corrections.json /mnt/birdcam-usb/
+python3 -m json.tool /mnt/birdcam-usb/corrections.json > /dev/null && echo valid
+```
+
+Write to `/mnt/birdcam-usb/corrections.json`, never to `~/birdcam/corrections.json`:
+the latter is a symlink to the drive, and replacing it would leave the gallery
+writing to the SD card. Corrections made in the admin after the last backup are
+lost; the damaged file set aside keeps them if they can be read.
+
+### 4. Restart
+
+```bash
+sudo systemctl start birdcam birdcam-gallery-admin birdcam-backup.timer
+systemctl is-active birdcam birdcam-gallery birdcam-gallery-admin birdcam-backup.timer
+```
+
+Expected: four `active`.
+
 ## If the USB drive is lost too
 
 Format a new drive (`sudo mkfs.ext4 -L birdcam-usb /dev/sdX1`), run the setup
@@ -78,5 +169,9 @@ script, then copy the backup back from macaron:
 ```bash
 ssh birdcam 'rsync -a -e "ssh -i ~/.ssh/id_ed25519_backup" macaron@192.168.1.177:birdcam_backups/ /mnt/birdcam-usb/'
 ```
+
+This bulk copy also brings back every photo deleted in the admin, and the old
+name of every renamed photo (see "What the backup is" above): expect duplicates
+in the gallery, to clean up in the admin. Motion pictures are not in the backup.
 
 Motion pictures are not backed up; they are purged after 14 days anyway.
