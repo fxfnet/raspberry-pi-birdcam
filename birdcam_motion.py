@@ -409,7 +409,9 @@ def sd_notify(message: str):
 previous_gray = None
 last_capture_time = 0.0
 last_sensor_timestamp = None
-last_new_frame_time = time.time()
+watchdog_disabled_logged = False
+# monotonic : sans RTC, l'heure murale du Pi saute au recalage NTP du démarrage.
+last_new_frame_time = time.monotonic()
 frame_buffer = deque(maxlen=FRAME_BUFFER_SIZE)
 
 try:
@@ -442,13 +444,15 @@ try:
             request.release()
         sd_notify("WATCHDOG=1")
 
-        now = time.time()
         # Sans horodatage (pilote qui ne le fournit pas), le watchdog se tait
-        # plutôt que de relancer le service en boucle.
+        # plutôt que de relancer le service en boucle ; on le signale une fois.
+        if sensor_timestamp is None and not watchdog_disabled_logged:
+            print("WATCHDOG: pas de SensorTimestamp, contrôle de gel désactivé.", file=sys.stderr)
+            watchdog_disabled_logged = True
         if sensor_timestamp is None or sensor_timestamp != last_sensor_timestamp:
             last_sensor_timestamp = sensor_timestamp
-            last_new_frame_time = now
-        elif now - last_new_frame_time > WATCHDOG_TIMEOUT_SECONDS:
+            last_new_frame_time = time.monotonic()
+        elif time.monotonic() - last_new_frame_time > WATCHDOG_TIMEOUT_SECONDS:
             print(
                 f"WATCHDOG: horodatage capteur figé depuis {WATCHDOG_TIMEOUT_SECONDS}s, "
                 "caméra probablement figée. Sortie pour redémarrage par systemd.",
@@ -456,6 +460,7 @@ try:
             )
             sys.exit(1)
 
+        now = time.time()
         frame_buffer.append(frame.copy())
 
         gray = prepare_motion_gray(frame)
