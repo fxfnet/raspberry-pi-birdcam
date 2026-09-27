@@ -75,11 +75,12 @@ MIN_SECONDS_BETWEEN_SHOTS = 0.7
 BURST_COUNT = 8
 BURST_INTERVAL_SECONDS = 0.12
 
-# Watchdog : si aucune variation d'image n'est détectée pendant cette durée,
-# on considère le flux caméra figé (ex : décrochage libcamera après un long
-# fonctionnement continu) et on sort pour laisser systemd (Restart=always)
-# relancer proprement le service.
-WATCHDOG_TIMEOUT_SECONDS = 1200
+# Watchdog : si l'horodatage capteur (SensorTimestamp) des images n'avance plus
+# pendant cette durée, le flux caméra est figé et on sort pour laisser systemd
+# (Restart=always) relancer proprement le service. L'horodatage avance à chaque
+# image même quand la scène est immobile : l'ancien critère (aucun pixel changé
+# pendant 20 min) relançait le service chaque nuit et par temps calme.
+WATCHDOG_TIMEOUT_SECONDS = 120
 
 
 # ------------------------------------------------------------
@@ -407,7 +408,8 @@ def sd_notify(message: str):
 
 previous_gray = None
 last_capture_time = 0.0
-last_motion_time = time.time()
+last_sensor_timestamp = None
+last_new_frame_time = time.time()
 frame_buffer = deque(maxlen=FRAME_BUFFER_SIZE)
 
 try:
@@ -432,8 +434,28 @@ try:
     sd_notify("READY=1")
 
     while True:
-        frame = picam2.capture_array()
+        request = picam2.capture_request()
+        try:
+            frame = request.make_array("main")
+            sensor_timestamp = request.get_metadata().get("SensorTimestamp")
+        finally:
+            request.release()
         sd_notify("WATCHDOG=1")
+
+        now = time.time()
+        # Sans horodatage (pilote qui ne le fournit pas), le watchdog se tait
+        # plutôt que de relancer le service en boucle.
+        if sensor_timestamp is None or sensor_timestamp != last_sensor_timestamp:
+            last_sensor_timestamp = sensor_timestamp
+            last_new_frame_time = now
+        elif now - last_new_frame_time > WATCHDOG_TIMEOUT_SECONDS:
+            print(
+                f"WATCHDOG: horodatage capteur figé depuis {WATCHDOG_TIMEOUT_SECONDS}s, "
+                "caméra probablement figée. Sortie pour redémarrage par systemd.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
         frame_buffer.append(frame.copy())
 
         gray = prepare_motion_gray(frame)
@@ -453,17 +475,6 @@ try:
         )[1]
 
         motion_score = cv2.countNonZero(threshold_image)
-        now = time.time()
-
-        if motion_score > 0:
-            last_motion_time = now
-        elif now - last_motion_time > WATCHDOG_TIMEOUT_SECONDS:
-            print(
-                f"WATCHDOG: aucune variation d'image depuis {WATCHDOG_TIMEOUT_SECONDS}s, "
-                "caméra probablement figée. Sortie pour redémarrage par systemd.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
 
         motion_detected = motion_score > MOTION_THRESHOLD
         capture_allowed = now - last_capture_time > MIN_SECONDS_BETWEEN_SHOTS
