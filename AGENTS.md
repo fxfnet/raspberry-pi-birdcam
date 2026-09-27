@@ -20,7 +20,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Documentation utilisateur | `README.md` |
 | Vérification de `corrections.json` avant sauvegarde, comptage des entrées, copies quotidiennes | `scripts/backup_usb.sh`, test : `bash scripts/test_backup_usb.sh` |
 
-## 🔴 Déploiement en attente — 2026-09-27
+## 🔴 Déploiement en attente, 2026-09-27
 
 Les commits du 2026-09-27 (mode opératoire de restauration depuis macaron dans `RESTORE.md`, vérification de `corrections.json` avec compteur dans `scripts/backup_usb.sh`, copies quotidiennes, code de sortie 3, `scripts/test_backup_usb.sh`) **ne sont pas déployés sur le Pi**. À la reconnexion : `git pull` sur le Pi, puis vérifier `systemctl status birdcam-backup`.
 
