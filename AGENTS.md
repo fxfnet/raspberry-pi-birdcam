@@ -11,6 +11,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Sujet | Fichier |
 |---|---|
 | Capture, détection, réglages (seuils, rafales) | `birdcam_motion.py` |
+| État courant, déploiement en attente, points ouverts, paris, prochaine action | `ETAT.md` |
 | Galerie web et admin | `gallery/app.py` |
 | Services et minuteries (capture, galerie, admin, purge, redémarrage nocturne) | `systemd/` |
 | Installation sur le Pi | `scripts/install_services.sh`, `scripts/install_models.sh` |
@@ -19,16 +20,6 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Entraînement du modèle d'espèces | `training/` (le dataset n'est pas versionné) |
 | Documentation utilisateur | `README.md` |
 | Vérification de `corrections.json` avant sauvegarde, comptage des entrées, copies quotidiennes | `scripts/backup_usb.sh`, test : `bash scripts/test_backup_usb.sh` |
-
-## 🔴 Déploiement en attente, 2026-09-27
-
-Les commits du 2026-09-27 (mode opératoire de restauration depuis macaron dans `RESTORE.md`, vérification de `corrections.json` avec compteur dans `scripts/backup_usb.sh`, copies quotidiennes, code de sortie 3, `scripts/test_backup_usb.sh`) **ne sont pas déployés sur le Pi**. À la reconnexion : `git pull` sur le Pi, puis vérifier `systemctl status birdcam-backup`.
-
-**Points ouverts** relevés en relecture :
-- croissance des copies quotidiennes de `corrections.json` (pas de purge) ;
-- horloge du Pi au démarrage (time-sync) non traitée ;
-- aucune alerte hors `systemctl status` en cas d'échec de sauvegarde ;
-- rsync macOS (`openrsync`) non testé en réel, seulement contre une cible locale.
 
 ## Comment déployer ?
 
@@ -51,3 +42,5 @@ Les commits du 2026-09-27 (mode opératoire de restauration depuis macaron dans 
 - FX fusionne. Aucun agent ne pousse sur `main` sans accord explicite.
 
 Style : français pour les échanges avec FX, vouvoiement, pas de tiret cadratin. Code et commits en anglais, comme l'historique.
+
+L'état courant (services, déploiements, rappels datés, points ouverts) ne s'écrit pas dans ce fichier : il va dans `ETAT.md`.
