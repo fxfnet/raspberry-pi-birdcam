@@ -1015,7 +1015,7 @@ HTML_TEMPLATE = """
 
 {% if latest_star and page == 1 and mode in ["bird", "star", "today", "all"] %}
 <section class="latest-star">
-    <a href="/image/{{ latest_star.name }}" target="_blank">
+    <a href="/view/{{ latest_star.name }}?filter=star">
         <div class="latest-star-inner">
             <img src="/thumb/{{ latest_star.name }}" alt="{{ latest_star.name }}">
             <div class="latest-star-text">
@@ -1035,7 +1035,7 @@ HTML_TEMPLATE = """
 {% if images %}
 <main class="gallery">
     {% for image in images %}
-    <div class="card" id="card-{{ loop.index }}">
+    <div class="card" id="{{ image.name }}">
         <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
         {% if image.starred %}
         <span class="badge star">STAR</span>
@@ -1053,7 +1053,7 @@ HTML_TEMPLATE = """
         </label>
         {% endif %}
 
-        <a href="/image/{{ image.name }}" target="_blank">
+        <a href="/view/{{ image.name }}?filter={{ mode }}&per_page={{ per_page }}{{ sp_param }}">
             <img src="/thumb/{{ image.name }}" loading="lazy" alt="{{ image.name }}">
         </a>
 
@@ -1247,6 +1247,221 @@ HTML_TEMPLATE = """
     });
 </script>
 
+</body>
+</html>
+"""
+
+
+VIEW_TEMPLATE = """
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ image.species_french or image.species or image.kind_label }} · {{ image.date }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {# Le Pi sert lentement les photos en pleine taille : on charge la suivante d'avance. #}
+    {% if next_name %}<link rel="prefetch" href="/image/{{ next_name }}">{% endif %}
+    <style>
+        :root {
+            --bg: #0d1110;
+            --panel: #171d1b;
+            --border: #34413b;
+            --text: #f2f1e8;
+            --muted: #a9b3ad;
+            --bird: #5fd38d;
+            --motion: #f0b35a;
+            --danger: #e46d5d;
+            --blue: #70a7d8;
+        }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; height: 100%; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+        a { color: inherit; }
+        .topbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+        .back {
+            text-decoration: none;
+            font-weight: 600;
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .info { flex: 1; min-width: 0; font-size: 14px; color: var(--muted); }
+        .info strong { color: var(--text); }
+        .position { font-size: 14px; color: var(--muted); white-space: nowrap; }
+        .stage {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+        }
+        .stage img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+        .nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 52px;
+            height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            text-decoration: none;
+            background: rgba(13, 17, 16, .65);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+        .nav.prev { left: 12px; }
+        .nav.next { right: 12px; }
+        .nav.disabled { opacity: .25; pointer-events: none; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #0d1110;
+            margin-right: 4px;
+        }
+        .badge.bird { background: var(--bird); }
+        .badge.motion { background: var(--motion); }
+        .badge.star { background: #ffd35a; }
+        .badge.species { background: var(--blue); }
+        .badge.species.probable { opacity: .6; }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 16px;
+            background: var(--panel);
+            border-top: 1px solid var(--border);
+        }
+        .actions form { margin: 0; display: flex; gap: 6px; align-items: center; }
+        .actions button, .actions select {
+            font: inherit;
+            font-size: 14px;
+            padding: 7px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #222b27;
+            color: var(--text);
+            cursor: pointer;
+        }
+        .actions button.danger { border-color: var(--danger); color: var(--danger); }
+    </style>
+</head>
+<body>
+{% set nav_query = "filter=" ~ mode ~ "&per_page=" ~ per_page ~ ("&species=" ~ species_query|urlencode if species_query else "") %}
+<div class="topbar">
+    <a class="back" href="{{ gallery_url }}">← Galerie</a>
+    <div class="info">
+        <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
+        {% if image.starred %}<span class="badge star">STAR</span>{% endif %}
+        {% if image.species %}
+        <span class="badge species {{ '' if image.species_sure else 'probable' }}">
+            {{ image.species_french or image.species }}{% if not image.species_sure %} ?{% endif %}
+        </span>
+        {% endif %}
+        <strong>{{ image.date }}</strong>
+        {% if image.species %}· {{ image.species }} ({{ image.species_conf }}){% endif %}
+        · <a href="/image/{{ image.name }}">original</a>
+    </div>
+    {% if position %}<div class="position">{{ position }} / {{ total }}</div>{% endif %}
+</div>
+
+<div class="stage">
+    <img src="/image/{{ image.name }}" alt="{{ image.name }}">
+    <a class="nav prev {{ '' if prev_name else 'disabled' }}" id="prev"
+       href="{{ '/view/' ~ prev_name ~ '?' ~ nav_query if prev_name else '#' }}" title="Précédente (←)">‹</a>
+    <a class="nav next {{ '' if next_name else 'disabled' }}" id="next"
+       href="{{ '/view/' ~ next_name ~ '?' ~ nav_query if next_name else '#' }}" title="Suivante (→)">›</a>
+</div>
+
+{% if admin_mode %}
+<div class="actions">
+    {% macro action(route, label, extra="", cls="", confirm_text="") %}
+    <form method="post" action="/{{ route }}/{{ image.name }}"
+          {% if confirm_text %}onsubmit="return confirm('{{ confirm_text }}')"{% endif %}>
+        <input type="hidden" name="view" value="1">
+        <input type="hidden" name="filter" value="{{ mode }}">
+        <input type="hidden" name="species_filter" value="{{ species_query }}">
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+        {{ extra | safe }}
+        <button type="submit" class="{{ cls }}">{{ label }}</button>
+    </form>
+    {% endmacro %}
+    {% if image.kind != "bird" %}{{ action("retag", "Bird", '<input type="hidden" name="new_tag" value="bird">') }}{% endif %}
+    {% if image.kind != "motion" %}{{ action("retag", "Motion", '<input type="hidden" name="new_tag" value="motion">') }}{% endif %}
+    {{ action("star", "Unstar" if image.starred else "Star") }}
+    {% if paris_species %}
+    <form method="post" action="/correct_species/{{ image.name }}">
+        <input type="hidden" name="view" value="1">
+        <input type="hidden" name="filter" value="{{ mode }}">
+        <input type="hidden" name="species_filter" value="{{ species_query }}">
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+        <select name="species" required>
+            <option value="">— species —</option>
+            {% for sp in paris_species %}
+            <option value="{{ sp.scientific }}" {{ 'selected' if image.species and sp.scientific.lower() == image.species.lower() else '' }}>{{ sp.french }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Correct</button>
+    </form>
+    {% endif %}
+    {% if image.species %}{{ action("clear_species", "Clear species") }}{% endif %}
+    {{ action("delete", "Delete", cls="danger", confirm_text="Delete this photo?") }}
+</div>
+{% endif %}
+
+<script>
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    const go = link => { if (!link.classList.contains("disabled")) location.href = link.href; };
+
+    document.addEventListener("keydown", event => {
+        if (event.target.closest("select, input, textarea")) return;
+        if (event.key === "ArrowLeft") go(prev);
+        else if (event.key === "ArrowRight") go(next);
+        else if (event.key === "Escape") location.href = {{ gallery_url|tojson }};
+    });
+
+    // Glissement horizontal sur mobile.
+    let startX = null, startY = null;
+    const stage = document.querySelector(".stage");
+    stage.addEventListener("touchstart", e => {
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    }, { passive: true });
+    stage.addEventListener("touchend", e => {
+        if (startX === null) return;
+        const dx = e.changedTouches[0].clientX - startX;
+        const dy = e.changedTouches[0].clientY - startY;
+        startX = null;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx > 0 ? prev : next);
+    });
+</script>
 </body>
 </html>
 """
@@ -2245,6 +2460,96 @@ def index():
     )
 
 
+def view_nav_args(source, species_key):
+    """
+    Filtre, espèce et taille de page transmis par la visionneuse. Dans les
+    formulaires, le champ "species" est l'espèce choisie pour la correction :
+    le filtre voyage donc sous "species_filter".
+    """
+    mode = source.get("filter", "bird")
+    if mode not in {"all", "bird", "motion", "star", "today", "species"}:
+        mode = "bird"
+    species_query = source.get(species_key, "")
+    try:
+        per_page = max(1, min(int(source.get("per_page", DEFAULT_PER_PAGE)), MAX_PER_PAGE))
+    except ValueError:
+        per_page = DEFAULT_PER_PAGE
+    return mode, species_query, per_page
+
+
+def view_url(filename, mode, species_query, per_page):
+    return url_for("view", filename=filename, filter=mode,
+                   species=species_query or None, per_page=per_page)
+
+
+def viewer_return(filename):
+    """
+    Pour une action lancée depuis la visionneuse, prépare la redirection :
+    la photo elle-même (sous son nouveau nom) si elle reste dans le filtre,
+    sinon la suivante, sinon la précédente, sinon la galerie.
+    Renvoie None si l'action vient de la galerie.
+    """
+    if request.form.get("view") != "1":
+        return None
+
+    mode, species_query, per_page = view_nav_args(request.form, "species_filter")
+    names = [image["name"] for image in filter_images(get_all_images(), mode, species_query)]
+    neighbours = []
+    if filename in names:
+        index = names.index(filename)
+        neighbours = names[index + 1:index + 2] + names[max(0, index - 1):index]
+
+    def go(new_name):
+        remaining = {image["name"] for image in filter_images(get_all_images(), mode, species_query)}
+        for name in [new_name, *neighbours]:
+            if name and name in remaining:
+                return redirect(view_url(name, mode, species_query, per_page))
+        return redirect(url_for("index", filter=mode, species=species_query or None, per_page=per_page))
+
+    return go
+
+
+@app.route("/view/<path:filename>")
+def view(filename):
+    path = safe_image_path(filename)
+    mode, species_query, per_page = view_nav_args(request.args, "species")
+
+    images = filter_images(get_all_images(), mode, species_query)
+    names = [image["name"] for image in images]
+
+    if filename in names:
+        index = names.index(filename)
+        current = images[index]
+        prev_name = names[index - 1] if index > 0 else None
+        next_name = names[index + 1] if index + 1 < len(names) else None
+        page = index // per_page + 1
+        position = index + 1
+    else:
+        # Photo hors du filtre (lien direct) : affichée sans navigation.
+        current = parse_image_metadata(path)
+        prev_name = next_name = None
+        page = 1
+        position = None
+
+    gallery_url = url_for("index", filter=mode, species=species_query or None,
+                          page=page, per_page=per_page) + "#" + filename
+
+    return render_template_string(
+        VIEW_TEMPLATE,
+        image=current,
+        prev_name=prev_name,
+        next_name=next_name,
+        position=position,
+        total=len(names),
+        gallery_url=gallery_url,
+        mode=mode,
+        species_query=species_query,
+        per_page=per_page,
+        admin_mode=ADMIN_MODE,
+        paris_species=PARIS_SPECIES_LIST,
+    )
+
+
 @app.route("/image/<path:filename>")
 def image(filename):
     safe_image_path(filename)
@@ -2271,8 +2576,12 @@ def clear_thumbs():
 @app.route("/delete/<path:filename>", methods=["POST"])
 def delete_image(filename):
     mode, page, per_page = current_nav_args_from_form()
+    back = viewer_return(filename)
 
     delete_image_and_thumbnail(filename)
+
+    if back:
+        return back(None)
 
     return redirect(
         url_for(
@@ -2288,8 +2597,12 @@ def delete_image(filename):
 def retag(filename):
     mode, page, per_page = current_nav_args_from_form()
     new_tag = request.form.get("new_tag", "")
+    back = viewer_return(filename)
 
-    retag_image(filename, new_tag)
+    new_name = retag_image(filename, new_tag)
+
+    if back:
+        return back(new_name)
 
     return redirect(
         url_for(
@@ -2304,8 +2617,12 @@ def retag(filename):
 @app.route("/star/<path:filename>", methods=["POST"])
 def star(filename):
     mode, page, per_page = current_nav_args_from_form()
+    back = viewer_return(filename)
 
-    toggle_star_image(filename)
+    new_name = toggle_star_image(filename)
+
+    if back:
+        return back(new_name)
 
     return redirect(
         url_for(
@@ -2327,6 +2644,8 @@ def correct_species(filename):
     if not scientific:
         abort(400)
 
+    back = viewer_return(filename)
+
     old_match = re.search(r"_sp([a-zA-Z0-9_-]+?)_spconf([0-9.]+)", path.name)
     was = old_match.group(1).replace("_", " ").title() if old_match else ""
 
@@ -2338,6 +2657,9 @@ def correct_species(filename):
 
     append_correction(new_path.name, was, scientific)
 
+    if back:
+        return back(new_path.name)
+
     mode, page, per_page = current_nav_args_from_form()
     return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
 
@@ -2346,7 +2668,7 @@ def clear_species_tag(path: Path):
     """Retire le suffixe _sp..._spconf... du nom de fichier."""
     new_stem = re.sub(r"_sp[a-zA-Z0-9_-]+?_spconf[0-9.]+$", "", path.stem)
     if new_stem == path.stem:
-        return
+        return path.name
     old_match = re.search(r"_sp([a-zA-Z0-9_-]+?)_spconf", path.name)
     was = old_match.group(1).replace("_", " ").title() if old_match else ""
     new_path = make_unique_path(path.parent / (new_stem + path.suffix))
@@ -2354,13 +2676,17 @@ def clear_species_tag(path: Path):
     path.rename(new_path)
     # now="" : espèce retirée à la main, retag_history.py ne la remettra pas.
     append_correction(new_path.name, was, "")
+    return new_path.name
 
 
 @app.route("/clear_species/<path:filename>", methods=["POST"])
 def clear_species(filename):
     require_admin()
     path = safe_image_path(filename)
-    clear_species_tag(path)
+    back = viewer_return(filename)
+    new_name = clear_species_tag(path)
+    if back:
+        return back(new_name)
     mode, page, per_page = current_nav_args_from_form()
     return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
 
