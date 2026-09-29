@@ -417,6 +417,8 @@ HTML_TEMPLATE = """
 
         .latest-star-meta {
             margin-top: 0.45rem;
+            /* Le nom de fichier est une seule longue chaîne sans espace. */
+            overflow-wrap: anywhere;
             color: var(--muted);
             font-size: 0.9rem;
             line-height: 1.5;
@@ -842,7 +844,8 @@ HTML_TEMPLATE = """
             }
 
             .latest-star-inner {
-                grid-template-columns: 1fr;
+                /* minmax(0, …) : sinon la colonne s'élargit au nom de fichier et déborde. */
+                grid-template-columns: minmax(0, 1fr);
             }
 
             .latest-star-title {
