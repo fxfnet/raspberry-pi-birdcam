@@ -57,6 +57,10 @@ MOTION_SIZE = (640, 480)
 # ------------------------------------------------------------
 
 LOOP_DELAY_SECONDS = 0.03
+
+# Relevé de l'exposition dans le journal, même sans mouvement, pour suivre
+# la pose courte au fil de la journée (journalctl -u birdcam | grep Exposition).
+EXPOSURE_LOG_INTERVAL_SECONDS = 600
 WARMUP_SECONDS = 2.0
 
 # Keep a few recent frames in memory. Each 1280x960 frame is ~3.7 MB: 30 frames
@@ -362,25 +366,41 @@ def classify_species(rgb_frame, bbox):
 # Camera setup
 # ------------------------------------------------------------
 
-# Pose courte : en plein jour, l'auto-exposition choisissait 4,5 ms (1/220 s),
-# ce qui file les ailes et le corps d'une mésange. Le mode "short" du fichier
-# de réglage est redéfini : pose plafonnée à 1 ms tant que le gain suffit
-# (gain 4,9 mesuré en plein soleil, bruit discret), puis 2 ms jusqu'au gain 8,
-# puis allongement de la pose en faible lumière, comme le mode normal.
-# Chaque étape : la pose monte jusqu'à shutter[i], puis le gain jusqu'à gain[i].
-SHORT_EXPOSURE_SHUTTER_US = [100, 1000, 2000, 66666]
-SHORT_EXPOSURE_GAIN = [1.0, 5.0, 8.0, 8.0]
+# Pose courte : par jour clair (10 000 lux), l'auto-exposition choisissait
+# 4,5 ms (1/220 s) au gain 1, ce qui file les ailes et le corps d'une mésange.
+# Le mode "short" du fichier de réglage est redéfini. Chaque étape : la pose
+# monte jusqu'à shutter[i], puis le gain jusqu'à gain[i]. Ordre de grandeur
+# (simulé à partir de la mesure à 10 000 lux, mode normal entre parenthèses) :
+#   soleil direct  0,9 ms gain 1   (identique)
+#   10 000 lux     1,1 ms gain 4   (4,5 ms gain 1), bruit discret mesuré à 4,8
+#   3 000 lux      3 ms gain 5     (10 ms gain 1,5)
+#   1 000 lux      7,5 ms gain 6   (22,5 ms gain 2)
+#   nuit           50 ms gain 8    (identique, plafond de FrameRate 20)
+# Le gain reste sous 6 par temps gris : le bruit au gain 8 n'a pas été mesuré
+# et le modèle d'espèces a été entraîné sur des captures à faible gain.
+SHORT_EXPOSURE_SHUTTER_US = [100, 1000, 3000, 10000, 66666]
+SHORT_EXPOSURE_GAIN = [1.0, 4.0, 6.0, 8.0, 8.0]
 
 
 def load_short_exposure_tuning():
     """
     Réglage de la caméra avec le mode d'exposition "short" redéfini.
-    Renvoie None (réglage par défaut de libcamera) si le fichier manque.
+    Renvoie None (réglage par défaut de libcamera) si le fichier manque ou si
+    sa structure a changé. Tout est vérifié ici : un réglage refusé par
+    libcamera rend la caméra introuvable jusqu'à la fin du processus (testé
+    sur le Pi), sans repli possible, et le service redémarrerait en boucle.
     """
     try:
+        if not (len(SHORT_EXPOSURE_SHUTTER_US) == len(SHORT_EXPOSURE_GAIN) >= 2):
+            raise ValueError("SHORT_EXPOSURE_* : listes de longueurs différentes")
         tuning = Picamera2.load_tuning_file("ov5647.json")
         agc = Picamera2.find_tuning_algo(tuning, "rpi.agc")
-        for channel in agc.get("channels", [agc]):
+        channels = agc.get("channels", [agc])
+        for channel in channels:
+            # Clés renommées par une mise à jour de libcamera : on n'injecte rien.
+            if set(channel["exposure_modes"]["short"]) != {"shutter", "gain"}:
+                raise ValueError(f"format inattendu : {channel['exposure_modes']['short']}")
+        for channel in channels:
             channel["exposure_modes"]["short"] = {
                 "shutter": SHORT_EXPOSURE_SHUTTER_US,
                 "gain": SHORT_EXPOSURE_GAIN,
@@ -442,6 +462,7 @@ previous_gray = None
 last_capture_time = 0.0
 last_sensor_timestamp = None
 watchdog_disabled_logged = False
+last_exposure_log_time = 0.0
 # monotonic : sans RTC, l'heure murale du Pi saute au recalage NTP du démarrage.
 last_new_frame_time = time.monotonic()
 frame_buffer = deque(maxlen=FRAME_BUFFER_SIZE)
@@ -492,6 +513,15 @@ try:
                 file=sys.stderr,
             )
             sys.exit(1)
+
+        if time.monotonic() - last_exposure_log_time > EXPOSURE_LOG_INTERVAL_SECONDS:
+            last_exposure_log_time = time.monotonic()
+            print(
+                f"Exposition: pose={metadata.get('ExposureTime', 0)}us "
+                f"gain={metadata.get('AnalogueGain', 0):.1f} "
+                f"gain_num={metadata.get('DigitalGain', 0):.2f} "
+                f"lux={metadata.get('Lux', 0):.0f}"
+            )
 
         now = time.time()
         frame_buffer.append(frame.copy())
