@@ -431,6 +431,8 @@ HTML_TEMPLATE = """
 
         .card {
             position: relative;
+            /* Retour de la visionneuse (#nom) : la carte ne passe pas sous le bandeau compact. */
+            scroll-margin-top: 8rem;
             background: var(--panel);
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -1443,6 +1445,7 @@ VIEW_TEMPLATE = """
 
     document.addEventListener("keydown", event => {
         if (event.target.closest("select, input, textarea")) return;
+        if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
         if (event.key === "ArrowLeft") go(prev);
         else if (event.key === "ArrowRight") go(next);
         else if (event.key === "Escape") location.href = {{ gallery_url|tojson }};
@@ -1451,11 +1454,17 @@ VIEW_TEMPLATE = """
     // Glissement horizontal sur mobile.
     let startX = null, startY = null;
     const stage = document.querySelector(".stage");
+    const zoomed = () => window.visualViewport && window.visualViewport.scale > 1.01;
     stage.addEventListener("touchstart", e => {
+        // Zoom à deux doigts ou déplacement d'une image zoomée : pas de changement de photo.
+        if (e.touches.length !== 1 || zoomed()) { startX = null; return; }
         startX = e.touches[0].clientX; startY = e.touches[0].clientY;
     }, { passive: true });
+    stage.addEventListener("touchmove", e => {
+        if (e.touches.length !== 1) startX = null;
+    }, { passive: true });
     stage.addEventListener("touchend", e => {
-        if (startX === null) return;
+        if (startX === null || zoomed()) return;
         const dx = e.changedTouches[0].clientX - startX;
         const dy = e.changedTouches[0].clientY - startY;
         startX = null;
@@ -2500,9 +2509,12 @@ def viewer_return(filename):
         neighbours = names[index + 1:index + 2] + names[max(0, index - 1):index]
 
     def go(new_name):
-        remaining = {image["name"] for image in filter_images(get_all_images(), mode, species_query)}
-        for name in [new_name, *neighbours]:
-            if name and name in remaining:
+        # Les voisines ne changent pas de filtre ; seule la photo modifiée
+        # est relue, sans reparcourir tout le dossier.
+        if new_name and filter_images([parse_image_metadata(CAPTURE_DIR / new_name)], mode, species_query):
+            return redirect(view_url(new_name, mode, species_query, per_page))
+        for name in neighbours:
+            if (CAPTURE_DIR / name).exists():
                 return redirect(view_url(name, mode, species_query, per_page))
         return redirect(url_for("index", filter=mode, species=species_query or None, per_page=per_page))
 
@@ -2511,6 +2523,10 @@ def viewer_return(filename):
 
 @app.route("/view/<path:filename>")
 def view(filename):
+    # Les actions ne visent que la racine des captures : un sous-dossier
+    # afficherait une photo et agirait sur une autre du même nom.
+    if "/" in filename:
+        abort(404)
     path = safe_image_path(filename)
     mode, species_query, per_page = view_nav_args(request.args, "species")
 
@@ -2575,6 +2591,7 @@ def clear_thumbs():
 
 @app.route("/delete/<path:filename>", methods=["POST"])
 def delete_image(filename):
+    require_admin()
     mode, page, per_page = current_nav_args_from_form()
     back = viewer_return(filename)
 
@@ -2595,6 +2612,7 @@ def delete_image(filename):
 
 @app.route("/retag/<path:filename>", methods=["POST"])
 def retag(filename):
+    require_admin()
     mode, page, per_page = current_nav_args_from_form()
     new_tag = request.form.get("new_tag", "")
     back = viewer_return(filename)
@@ -2616,6 +2634,7 @@ def retag(filename):
 
 @app.route("/star/<path:filename>", methods=["POST"])
 def star(filename):
+    require_admin()
     mode, page, per_page = current_nav_args_from_form()
     back = viewer_return(filename)
 
