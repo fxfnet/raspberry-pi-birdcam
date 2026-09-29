@@ -1,6 +1,6 @@
 # ETAT : Birdcam
 
-> État partagé du projet. Toute session ou tout agent, quel que soit le modèle, le lit en premier et le met à jour en dernier (rôle de l'archiviste). La carte du projet est `AGENTS.md` ; le raisonnement des décisions, `DECISIONS.md`.
+> État partagé du projet. Toute session ou tout agent, quel que soit le modèle, le lit en premier et le met à jour en dernier (rôle de l'archiviste). La carte du projet est `AGENTS.md`. Ce dépôt n'a pas de `DECISIONS.md` : les décisions et leurs motifs sont dans les messages de commit.
 
 Dernière mise à jour : 2026-09-29 par Claude (session Cowork, création : état courant déplacé depuis `AGENTS.md`, contenu inchangé hors tirets cadratins remplacés)
 
