@@ -2,6 +2,7 @@
 
 import numpy as np
 from picamera2 import Picamera2
+from libcamera import controls
 from datetime import datetime
 from pathlib import Path
 from collections import deque
@@ -361,7 +362,37 @@ def classify_species(rgb_frame, bbox):
 # Camera setup
 # ------------------------------------------------------------
 
-picam2 = Picamera2()
+# Pose courte : en plein jour, l'auto-exposition choisissait 4,5 ms (1/220 s),
+# ce qui file les ailes et le corps d'une mésange. Le mode "short" du fichier
+# de réglage est redéfini : pose plafonnée à 1 ms tant que le gain suffit
+# (gain 4,9 mesuré en plein soleil, bruit discret), puis 2 ms jusqu'au gain 8,
+# puis allongement de la pose en faible lumière, comme le mode normal.
+# Chaque étape : la pose monte jusqu'à shutter[i], puis le gain jusqu'à gain[i].
+SHORT_EXPOSURE_SHUTTER_US = [100, 1000, 2000, 66666]
+SHORT_EXPOSURE_GAIN = [1.0, 5.0, 8.0, 8.0]
+
+
+def load_short_exposure_tuning():
+    """
+    Réglage de la caméra avec le mode d'exposition "short" redéfini.
+    Renvoie None (réglage par défaut de libcamera) si le fichier manque.
+    """
+    try:
+        tuning = Picamera2.load_tuning_file("ov5647.json")
+        agc = Picamera2.find_tuning_algo(tuning, "rpi.agc")
+        for channel in agc.get("channels", [agc]):
+            channel["exposure_modes"]["short"] = {
+                "shutter": SHORT_EXPOSURE_SHUTTER_US,
+                "gain": SHORT_EXPOSURE_GAIN,
+            }
+        return tuning
+    except Exception as error:
+        print(f"Pose courte indisponible, exposition par défaut : {error}", file=sys.stderr)
+        return None
+
+
+short_exposure_tuning = load_short_exposure_tuning()
+picam2 = Picamera2(tuning=short_exposure_tuning)
 
 camera_config = picam2.create_video_configuration(
     main={
@@ -371,8 +402,9 @@ camera_config = picam2.create_video_configuration(
     controls={
         "FrameRate": 20,
         # ExposureTime et AnalogueGain laissés en auto-exposition (AEC/AGC)
-        # pour gérer la lumière variable en extérieur.
-        # Décommenter pour forcer : "ExposureTime": 3000, "AnalogueGain": 2.0
+        # pour gérer la lumière variable en extérieur, avec la courbe de
+        # pose courte ci-dessus.
+        **({"AeExposureMode": controls.AeExposureModeEnum.Short} if short_exposure_tuning else {}),
     }
 )
 
@@ -439,7 +471,8 @@ try:
         request = picam2.capture_request()
         try:
             frame = request.make_array("main")
-            sensor_timestamp = request.get_metadata().get("SensorTimestamp")
+            metadata = request.get_metadata()
+            sensor_timestamp = metadata.get("SensorTimestamp")
         finally:
             request.release()
         sd_notify("WATCHDOG=1")
@@ -549,7 +582,8 @@ try:
                 f"Motion: {motion_score} | "
                 f"burst=0-{BURST_COUNT-1} | "
                 f"bird={bird_any}"
-                f"{species_str}"
+                f"{species_str} | "
+                f"pose={metadata.get('ExposureTime', 0)}us gain={metadata.get('AnalogueGain', 0):.1f}"
             )
 
             last_capture_time = time.time()
