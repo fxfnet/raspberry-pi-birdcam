@@ -17,7 +17,8 @@ import time
 app = Flask(__name__)
 # Tailscale Funnel sert le site en https et relaie en http vers Flask :
 # X-Forwarded-Proto rétablit https dans les URL absolues (og:url, og:image).
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
+# x_for=0 : un client du réseau local ne peut pas falsifier son adresse dans les journaux.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=0, x_proto=1)
 
 CAPTURE_DIR = Path.home() / "birdcam" / "captures"
 THUMB_DIR = Path.home() / "birdcam" / "gallery" / "thumbs"
@@ -420,7 +421,7 @@ HTML_TEMPLATE = """
 
         .latest-star-meta {
             margin-top: 0.45rem;
-            /* Le nom de fichier est une seule longue chaîne sans espace. */
+            /* Un nom d'espèce long ne doit pas élargir la carte. */
             overflow-wrap: anywhere;
             color: var(--muted);
             font-size: 0.9rem;
@@ -2074,34 +2075,64 @@ def filter_images(images, mode: str, species_query: str = ""):
     return images
 
 
-BURST_NAME_RE = re.compile(r"_(\d{8}_\d{6}_\d{3})_burst\d+_motion(\d+)")
-BURST_MAX_GAP_SECONDS = 3
+BURST_NAME_RE = re.compile(r"_(\d{8})_(\d{2})(\d{2})(\d{2})_(\d{3})_burst(\d+)_motion(\d+)")
+BURST_MAX_GAP_MS = 3000
+
+
+def burst_info(image):
+    """
+    (instant de prise en ms, index dans la rafale, score de mouvement) lus
+    dans le nom de fichier, ou None. Arithmétique entière plutôt que
+    datetime.strptime : moins coûteux sur le Pi 3B, et un nom à date
+    impossible ne fait jamais tomber la galerie. L'instant n'est exact qu'au
+    sein d'une même journée, ce qui suffit pour trier et pour l'écart de 3 s.
+    """
+    match = BURST_NAME_RE.search(image["clean_name"])
+    if not match:
+        return None
+    day, hours, minutes, seconds, millis, index, motion = match.groups()
+    taken = (
+        int(day) * 86_400_000 + int(hours) * 3_600_000
+        + int(minutes) * 60_000 + int(seconds) * 1000 + int(millis)
+    )
+    return taken, int(index), motion
 
 
 def group_bursts(images):
     """
-    Regroupe les photos d'une même rafale : même score de mouvement et moins
-    de BURST_MAX_GAP_SECONDS entre deux photos (horodatage du nom de fichier).
-    Attend la liste triée de la plus récente à la plus ancienne ; rend les
-    rafales dans cet ordre, et les photos d'une rafale dans l'ordre de prise.
+    Regroupe les photos d'une même rafale : même score de mouvement, moins de
+    BURST_MAX_GAP_MS entre deux photos, index de rafale strictement croissant
+    (un retour à burst0 ouvre une nouvelle rafale, même au même score).
+    Rend les rafales de la plus récente à la plus ancienne, et les photos
+    d'une rafale dans l'ordre de prise, même si leurs mtime sont égales
+    (copie ou restauration qui arrondit les dates).
     """
+    infos = {image["name"]: burst_info(image) for image in images}
+    ordered = sorted(
+        images,
+        key=lambda image: (int(image["mtime"]), infos[image["name"]] or (0, 0, ""), image["name"]),
+        reverse=True,
+    )
+
     groups = []
-    for image in images:
-        match = BURST_NAME_RE.search(image["clean_name"])
-        taken = datetime.strptime(match.group(1), "%Y%m%d_%H%M%S_%f") if match else None
-        motion = match.group(2) if match else None
+    for image in ordered:
+        info = infos[image["name"]]
         last = groups[-1] if groups else None
+        last_info = infos[last[-1]["name"]] if last else None
         if (
-            taken and last and last["motion"] == motion
-            and abs((last["taken"] - taken).total_seconds()) <= BURST_MAX_GAP_SECONDS
+            info and last_info
+            and info[2] == last_info[2]
+            and info[1] < last_info[1]
+            and last_info[0] - info[0] <= BURST_MAX_GAP_MS
         ):
-            last["images"].append(image)
-            last["taken"] = taken
+            last.append(image)
         else:
-            groups.append({"motion": motion, "taken": taken, "images": [image]})
-    for group in groups:
-        group["images"].sort(key=lambda image: image["mtime"])
-    return groups
+            groups.append([image])
+
+    return [
+        {"images": sorted(group, key=lambda image: infos[image["name"]] or (0, 0, ""))}
+        for group in groups
+    ]
 
 
 def split_pages(groups, per_page: int):
