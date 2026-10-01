@@ -13,6 +13,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Capture, détection, réglages (seuils, rafales) | `birdcam_motion.py` |
 | État courant, déploiement en attente, points ouverts, paris, prochaine action | `ETAT.md` |
 | Galerie web et admin | `gallery/app.py` |
+| Test de la galerie (rafales, légendes, `og:url`), sans caméra ni OpenCV | `scripts/test_gallery_bursts.py` |
 | Services et minuteries (capture, galerie, admin, purge, redémarrage nocturne) | `systemd/` |
 | Installation sur le Pi | `scripts/install_services.sh`, `scripts/install_models.sh` |
 | Sauvegarde horaire des photos d'oiseaux vers macaron | `scripts/backup_usb.sh`, `systemd/birdcam-backup.*` |
