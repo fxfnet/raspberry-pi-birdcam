@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 from flask import Flask, render_template_string, send_from_directory, abort, request, redirect, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from pathlib import Path
 from datetime import datetime, date
 import subprocess
 import shutil
-import math
 import re
 import json
 import cv2
@@ -15,6 +15,9 @@ import time
 
 
 app = Flask(__name__)
+# Tailscale Funnel sert le site en https et relaie en http vers Flask :
+# X-Forwarded-Proto rétablit https dans les URL absolues (og:url, og:image).
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
 
 CAPTURE_DIR = Path.home() / "birdcam" / "captures"
 THUMB_DIR = Path.home() / "birdcam" / "gallery" / "thumbs"
@@ -484,36 +487,82 @@ HTML_TEMPLATE = """
             background: var(--toysfab);
         }
 
-        .badge.species {
-            top: 44px;
-            background: #fff;
-            letter-spacing: 0;
-        }
-
-        .badge.species.probable {
-            opacity: 0.7;
-            font-style: italic;
-        }
-
         .meta {
             padding: 0.75rem;
             font-size: 0.83rem;
             color: #ccc;
         }
 
-        .filename {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .meta-species {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
             color: #fff;
             font-weight: 600;
         }
 
-        .details {
-            margin-top: 0.35rem;
+        .meta-species .unknown {
+            color: var(--muted);
+            font-weight: 400;
+        }
+
+        /* Certitude de l'espèce : barre verte si sûre, ambre si probable. */
+        .certainty {
+            flex: 0 0 48px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            overflow: hidden;
+        }
+
+        .certainty > span {
+            display: block;
+            height: 100%;
+            background: var(--bird);
+        }
+
+        .certainty.probable > span {
+            background: var(--motion);
+        }
+
+        .meta-time {
+            margin-top: 0.25rem;
+            color: var(--muted);
+        }
+
+        .burst {
+            grid-column: 1 / -1;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .burst-head {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin: 0 0 10px 4px;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .burst-head strong {
+            color: var(--text);
+        }
+
+        .burst-select {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            cursor: pointer;
+        }
+
+        .burst-cards {
             display: grid;
-            gap: 0.15rem;
-            color: #aaa;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 14px;
         }
 
         .admin-actions {
@@ -592,6 +641,11 @@ HTML_TEMPLATE = """
             outline-offset: -1px;
         }
 
+        /* display: flex ci-dessous l'emporterait sur l'attribut hidden. */
+        .bulk-bar[hidden] {
+            display: none;
+        }
+
         .bulk-bar {
             position: fixed;
             bottom: 1rem;
@@ -649,37 +703,6 @@ HTML_TEMPLATE = """
             padding: 0.28rem 0.65rem;
             cursor: pointer;
             max-width: 160px;
-        }
-
-        .card-extra {
-            margin-top: 0.1rem;
-        }
-
-        .card-extra summary {
-            cursor: pointer;
-            list-style: none;
-            color: var(--muted);
-            font-size: 0.8rem;
-        }
-
-        .card-extra summary::-webkit-details-marker { display: none; }
-
-        .card-extra summary::after {
-            content: " ↓";
-            font-size: 0.7rem;
-            opacity: 0.5;
-        }
-
-        .card-extra[open] summary::after {
-            content: " ↑";
-        }
-
-        .card-extra > div {
-            font-size: 0.78rem;
-            color: var(--muted);
-            margin-top: 0.15rem;
-            padding-left: 0.4rem;
-            border-left: 2px solid var(--border);
         }
 
         .correct-species-wrap {
@@ -913,6 +936,17 @@ HTML_TEMPLATE = """
 <body>
 
 {% set sp_param = "&species=" ~ species_query if species_query else "" %}
+{% macro species_line(image) %}
+<div class="meta-species">
+    {% if image.species %}
+    <span title="{{ image.species }}">{{ image.species_french or image.species }}</span>
+    <span class="certainty {{ '' if image.species_sure else 'probable' }}"
+          title="Certitude {{ image.species_percent }} %"><span style="width: {{ image.species_percent }}%"></span></span>
+    {% else %}
+    <span class="unknown">Espèce non identifiée</span>
+    {% endif %}
+</div>
+{% endmacro %}
 
 <header id="page-header">
     <h1>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }}</h1>
@@ -1027,9 +1061,8 @@ HTML_TEMPLATE = """
                 <div class="latest-star-kicker">Latest star</div>
                 <div class="latest-star-title">A favourite visitor from the feeder</div>
                 <div class="latest-star-meta">
-                    {{ latest_star.date }}<br>
-                    {{ latest_star.name }}<br>
-                    Confidence: {{ latest_star.confidence }} · Best: {{ latest_star.best_label }}
+                    {{ species_line(latest_star) }}
+                    <div class="meta-time">{{ latest_star.when }}</div>
                 </div>
             </div>
         </div>
@@ -1039,17 +1072,25 @@ HTML_TEMPLATE = """
 
 {% if images %}
 <main class="gallery">
-    {% for image in images %}
+    {% for group in groups %}
+    {% set burst = group.images|length > 1 %}
+    {% if burst %}
+    <section class="burst">
+        <div class="burst-head">
+            <strong>Rafale</strong> · {{ group.images|length }} photos · {{ group.images[0].when }}
+            {% if admin_mode %}
+            <label class="burst-select">
+                <input type="checkbox" class="burst-cb"> Toute la rafale
+            </label>
+            {% endif %}
+        </div>
+        <div class="burst-cards">
+    {% endif %}
+    {% for image in group.images %}
     <div class="card" id="{{ image.name }}">
         <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
         {% if image.starred %}
         <span class="badge star">STAR</span>
-        {% endif %}
-        {% if image.species %}
-        <span class="badge species {{ '' if image.species_sure else 'probable' }}"
-              title="{{ image.species }} ({{ image.species_conf }})">
-            {{ image.species_french or image.species }}{% if not image.species_sure %} ?{% endif %}
-        </span>
         {% endif %}
 
         {% if admin_mode %}
@@ -1059,26 +1100,19 @@ HTML_TEMPLATE = """
         {% endif %}
 
         <a href="/view/{{ image.name }}?filter={{ mode }}&per_page={{ per_page }}{{ sp_param }}">
-            <img src="/thumb/{{ image.name }}" loading="lazy" alt="{{ image.name }}">
+            <img src="/thumb/{{ image.name }}" loading="lazy" alt="{{ image.species_french or image.species or image.kind_label }}">
         </a>
 
         <div class="meta">
-            <div class="filename">{{ image.name }}</div>
-
-            <div class="details">
-                <div>{{ image.date }}</div>
-                <details class="card-extra">
-                    <summary>
-                        {% if image.species %}Espèce : {{ image.species }} ({{ image.species_conf }})
-                        {% else %}Best: {{ image.best_label }}{% endif %}
-                    </summary>
-                    <div>Confidence: {{ image.confidence }}</div>
-                    <div>Motion score: {{ image.motion_score }}</div>
-                </details>
-            </div>
-
+            {{ species_line(image) }}
+            <div class="meta-time">{{ image.when }}</div>
         </div>
     </div>
+    {% endfor %}
+    {% if burst %}
+        </div>
+    </section>
+    {% endif %}
     {% endfor %}
 </main>
 {% else %}
@@ -1229,6 +1263,7 @@ HTML_TEMPLATE = """
     }
 
     function selectAll() {
+        document.querySelectorAll(".burst-cb").forEach(cb => { cb.checked = true; });
         document.querySelectorAll(".bulk-cb").forEach(cb => {
             cb.checked = true;
             cb.closest(".card").classList.add("selected");
@@ -1237,6 +1272,7 @@ HTML_TEMPLATE = """
     }
 
     function clearSelection() {
+        document.querySelectorAll(".burst-cb").forEach(cb => { cb.checked = false; });
         document.querySelectorAll(".bulk-cb").forEach(cb => {
             cb.checked = false;
             cb.closest(".card").classList.remove("selected");
@@ -1247,6 +1283,22 @@ HTML_TEMPLATE = """
     document.querySelectorAll(".bulk-cb").forEach(cb => {
         cb.addEventListener("change", function () {
             this.closest(".card").classList.toggle("selected", this.checked);
+            const burst = this.closest(".burst");
+            if (burst) {
+                const all = [...burst.querySelectorAll(".bulk-cb")];
+                burst.querySelector(".burst-cb").checked = all.every(c => c.checked);
+            }
+            updateBulkBar();
+        });
+    });
+
+    // Case "Toute la rafale" : coche ou décoche toutes les photos du cadre.
+    document.querySelectorAll(".burst-cb").forEach(burstCb => {
+        burstCb.addEventListener("change", function () {
+            this.closest(".burst").querySelectorAll(".bulk-cb").forEach(cb => {
+                cb.checked = this.checked;
+                cb.closest(".card").classList.toggle("selected", this.checked);
+            });
             updateBulkBar();
         });
     });
@@ -1352,8 +1404,17 @@ VIEW_TEMPLATE = """
         .badge.bird { background: var(--bird); }
         .badge.motion { background: var(--motion); }
         .badge.star { background: #ffd35a; }
-        .badge.species { background: var(--blue); }
-        .badge.species.probable { opacity: .6; }
+        .certainty {
+            display: inline-block;
+            vertical-align: middle;
+            width: 48px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .12);
+            overflow: hidden;
+        }
+        .certainty > span { display: block; height: 100%; background: var(--bird); }
+        .certainty.probable > span { background: var(--motion); }
         .actions {
             display: flex;
             flex-wrap: wrap;
@@ -1386,12 +1447,11 @@ VIEW_TEMPLATE = """
         <span class="badge {{ image.kind_class }}">{{ image.kind_label }}</span>
         {% if image.starred %}<span class="badge star">STAR</span>{% endif %}
         {% if image.species %}
-        <span class="badge species {{ '' if image.species_sure else 'probable' }}">
-            {{ image.species_french or image.species }}{% if not image.species_sure %} ?{% endif %}
-        </span>
+        <strong title="{{ image.species }}">{{ image.species_french or image.species }}</strong>
+        <span class="certainty {{ '' if image.species_sure else 'probable' }}"
+              title="Certitude {{ image.species_percent }} %"><span style="width: {{ image.species_percent }}%"></span></span>
         {% endif %}
-        <strong>{{ image.date }}</strong>
-        {% if image.species %}· {{ image.species }} ({{ image.species_conf }}){% endif %}
+        · {{ image.when }}
         · <a href="/image/{{ image.name }}">original</a>
     </div>
     {% if position %}<div class="position">{{ position }} / {{ total }}</div>{% endif %}
@@ -1966,6 +2026,8 @@ def parse_image_metadata(path: Path):
         "species_conf": species_conf,
         "species_sure": species_sure,
         "species_french": french_name(species) if species else "",
+        "species_percent": round(float(species_conf) * 100) if species_conf else 0,
+        "when": modified.strftime("%d/%m/%Y %H:%M:%S"),
         "date": modified.strftime("%Y-%m-%d %H:%M:%S"),
         "day": modified.strftime("%Y-%m-%d"),
         "mtime": stat.st_mtime,
@@ -2012,16 +2074,52 @@ def filter_images(images, mode: str, species_query: str = ""):
     return images
 
 
-def paginate_images(images, page: int, per_page: int):
-    total = len(images)
-    total_pages = max(1, math.ceil(total / per_page))
+BURST_NAME_RE = re.compile(r"_(\d{8}_\d{6}_\d{3})_burst\d+_motion(\d+)")
+BURST_MAX_GAP_SECONDS = 3
 
-    page = max(1, min(page, total_pages))
 
-    start = (page - 1) * per_page
-    end = start + per_page
+def group_bursts(images):
+    """
+    Regroupe les photos d'une même rafale : même score de mouvement et moins
+    de BURST_MAX_GAP_SECONDS entre deux photos (horodatage du nom de fichier).
+    Attend la liste triée de la plus récente à la plus ancienne ; rend les
+    rafales dans cet ordre, et les photos d'une rafale dans l'ordre de prise.
+    """
+    groups = []
+    for image in images:
+        match = BURST_NAME_RE.search(image["clean_name"])
+        taken = datetime.strptime(match.group(1), "%Y%m%d_%H%M%S_%f") if match else None
+        motion = match.group(2) if match else None
+        last = groups[-1] if groups else None
+        if (
+            taken and last and last["motion"] == motion
+            and abs((last["taken"] - taken).total_seconds()) <= BURST_MAX_GAP_SECONDS
+        ):
+            last["images"].append(image)
+            last["taken"] = taken
+        else:
+            groups.append({"motion": motion, "taken": taken, "images": [image]})
+    for group in groups:
+        group["images"].sort(key=lambda image: image["mtime"])
+    return groups
 
-    return images[start:end], page, total_pages
+
+def split_pages(groups, per_page: int):
+    """Pages d'au moins per_page photos, sans jamais couper une rafale."""
+    pages = [[]]
+    count = 0
+    for group in groups:
+        if count >= per_page:
+            pages.append([])
+            count = 0
+        pages[-1].append(group)
+        count += len(group["images"])
+    return pages
+
+
+def ordered_images(groups):
+    """Photos dans l'ordre d'affichage de la galerie (pour la visionneuse)."""
+    return [image for group in groups for image in group["images"]]
 
 
 def make_page_numbers(page: int, total_pages: int):
@@ -2443,7 +2541,11 @@ def index():
     all_images = get_all_images()
     filtered_images = filter_images(all_images, mode, species_query)
 
-    page_images, page, total_pages = paginate_images(filtered_images, page, per_page)
+    pages = split_pages(group_bursts(filtered_images), per_page)
+    total_pages = len(pages)
+    page = max(1, min(page, total_pages))
+    page_groups = pages[page - 1]
+    page_images = ordered_images(page_groups)
     page_numbers = make_page_numbers(page, total_pages)
 
     status = build_status(all_images)
@@ -2452,6 +2554,7 @@ def index():
     return render_template_string(
         HTML_TEMPLATE,
         images=page_images,
+        groups=page_groups,
         count=len(page_images),
         total=len(all_images),
         filtered_total=len(filtered_images),
@@ -2505,7 +2608,7 @@ def viewer_return(filename):
         return None
 
     mode, species_query, per_page = view_nav_args(request.form, "species_filter")
-    names = [image["name"] for image in filter_images(get_all_images(), mode, species_query)]
+    names = [image["name"] for image in ordered_images(group_bursts(filter_images(get_all_images(), mode, species_query)))]
     neighbours = []
     if filename in names:
         index = names.index(filename)
@@ -2533,7 +2636,8 @@ def view(filename):
     path = safe_image_path(filename)
     mode, species_query, per_page = view_nav_args(request.args, "species")
 
-    images = filter_images(get_all_images(), mode, species_query)
+    groups = group_bursts(filter_images(get_all_images(), mode, species_query))
+    images = ordered_images(groups)
     names = [image["name"] for image in images]
 
     if filename in names:
@@ -2541,7 +2645,10 @@ def view(filename):
         current = images[index]
         prev_name = names[index - 1] if index > 0 else None
         next_name = names[index + 1] if index + 1 < len(names) else None
-        page = index // per_page + 1
+        page = next(
+            number for number, page_groups in enumerate(split_pages(groups, per_page), start=1)
+            if any(image["name"] == filename for group in page_groups for image in group["images"])
+        )
         position = index + 1
     else:
         # Photo hors du filtre (lien direct) : affichée sans navigation.
