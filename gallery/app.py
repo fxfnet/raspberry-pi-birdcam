@@ -1009,6 +1009,7 @@ HTML_TEMPLATE = """
             Camera: {{ status.birdcam_service.status }}
         </div>
 
+        {% if not status.clip_waiting %}
         <form method="post" action="/camera/toggle">
             <input type="hidden" name="filter" value="{{ mode }}">
             <input type="hidden" name="page" value="{{ page }}">
@@ -1026,6 +1027,7 @@ HTML_TEMPLATE = """
                 Test Camera
             </button>
         </form>
+        {% endif %}
 
         {% if status.clip_waiting %}
         <div class="status-item">
@@ -3001,6 +3003,10 @@ def camera_toggle():
 
     mode, page, per_page = current_nav_args_from_form()
 
+    # La caméra est tenue par le clip : y toucher la ferait échouer en boucle.
+    if service_status(CLIP_SERVICE)["active"]:
+        return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
+
     svc = service_status("birdcam")
     action = "stop" if svc["active"] else "start"
 
@@ -3021,6 +3027,10 @@ def camera_test():
     require_admin()
 
     mode, page, per_page = current_nav_args_from_form()
+
+    # La caméra est tenue par le clip : y toucher la ferait échouer en boucle.
+    if service_status(CLIP_SERVICE)["active"]:
+        return redirect(url_for("index", filter=mode, page=page, per_page=per_page))
 
     run_camera_test()
 
@@ -3088,11 +3098,18 @@ def clip_request():
     # Le clip rend la caméra à la capture photo en finissant : on ne le lance
     # pas si la caméra a été arrêtée volontairement, ni s'il attend déjà.
     if service_status("birdcam")["active"] and not service_status(CLIP_SERVICE)["active"]:
-        subprocess.run(
-            ["sudo", "systemctl", "start", "--no-block", CLIP_SERVICE],
-            capture_output=True,
-            timeout=5,
-        )
+        try:
+            result = subprocess.run(
+                ["sudo", "systemctl", "start", "--no-block", CLIP_SERVICE],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except subprocess.TimeoutExpired:
+            return "Le lancement du clip a dépassé 5 s.", 504
+        if result.returncode != 0:
+            # Typiquement : unité absente, install_services.sh n'a pas été relancé.
+            return f"Le clip n'a pas pu être lancé : {result.stderr.strip()}", 502
 
     return redirect(url_for("index"))
 
@@ -3101,11 +3118,14 @@ def clip_request():
 def clip_cancel():
     require_admin()
 
-    subprocess.run(
-        ["sudo", "systemctl", "stop", CLIP_SERVICE],
-        capture_output=True,
-        timeout=30,
-    )
+    try:
+        subprocess.run(
+            ["sudo", "systemctl", "stop", CLIP_SERVICE],
+            capture_output=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        pass
 
     return redirect(url_for("index"))
 

@@ -92,6 +92,33 @@ client.post("/clip/request")
 check("caméra arrêtée : pas de lancement", calls == [])
 check("caméra arrêtée : bouton absent", "/clip/request" not in client.get("/").get_data(as_text=True))
 
+# Pendant l'attente : ni Start ni Test Camera (le clip tient la caméra), refus côté serveur aussi.
+calls.clear()
+active[app.CLIP_SERVICE] = True
+active["birdcam"] = False
+page = client.get("/").get_data(as_text=True)
+check("attente : ni Start Camera ni Test Camera", "Start Camera" not in page and "/camera/test" not in page)
+client.post("/camera/toggle")
+client.post("/camera/test")
+check("attente : toggle et test sans effet", calls == [])
+active[app.CLIP_SERVICE] = False
+active["birdcam"] = True
+
+# Échec du lancement (unité absente) : message visible, pas de redirection silencieuse.
+app.subprocess.run = lambda cmd, **_kw: types.SimpleNamespace(returncode=5, stdout="", stderr="Unit birdcam-clip.service not found.")
+response = client.post("/clip/request")
+check("lancement en échec : 502 avec le motif", response.status_code == 502 and "not found" in response.get_data(as_text=True))
+
+
+def timeout(cmd, **_kw):
+    raise app.subprocess.TimeoutExpired(cmd, 30)
+
+
+app.subprocess.run = timeout
+check("annulation trop lente : pas d'erreur 500", client.post("/clip/cancel").status_code == 302)
+check("lancement trop lent : 504", client.post("/clip/request").status_code == 504)
+app.subprocess.run = fake_run
+
 # Suppression.
 check("suppression d'un nom étranger : 404", client.post("/clip/delete/autre.mp4").status_code == 404)
 client.post(f"/clip/delete/{NAME}")

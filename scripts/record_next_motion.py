@@ -50,7 +50,9 @@ def log(message):
 
 
 def systemctl(action):
-    subprocess.run(["sudo", "systemctl", action, "birdcam"], check=False)
+    # start sans attendre la fin du démarrage : l'arrêt de cette unité reste court.
+    flags = ["--no-block"] if action == "start" else []
+    subprocess.run(["sudo", "systemctl", action, *flags, "birdcam"], check=False)
 
 
 def stop_on_signal(signum, _frame):
@@ -69,10 +71,10 @@ def main():
     signal.signal(signal.SIGHUP, stop_on_signal)
     CLIPS_DIR.mkdir(exist_ok=True)
 
-    log("Arrêt de la capture photo")
-    systemctl("stop")
     picam2 = None
     try:
+        log("Arrêt de la capture photo")
+        systemctl("stop")
         picam2 = Picamera2()
         picam2.configure(picam2.create_video_configuration(
             main={"size": VIDEO_SIZE, "format": "YUV420"},
@@ -103,12 +105,16 @@ def main():
         log("Aucun mouvement dans le délai, pas de clip")
         return 1
     finally:
+        # Un second signal (clic sur Annuler pendant le nettoyage) ne doit pas
+        # sauter la relance de la capture photo.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
         if picam2 is not None:
-            try:
-                picam2.stop_recording()
-                picam2.close()
-            except Exception as error:
-                log(f"Arrêt de la caméra : {error}")
+            for step in (picam2.stop_recording, picam2.close):
+                try:
+                    step()
+                except Exception as error:
+                    log(f"Arrêt de la caméra : {error}")
         log("Relance de la capture photo")
         systemctl("start")
 
