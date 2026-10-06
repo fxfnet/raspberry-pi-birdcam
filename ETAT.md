@@ -54,8 +54,8 @@ Fichier non suivi dans le repo : `training/garden_birds_captures.onnx`, doublon 
 Pour déployer (sur accord de FX, après fusion) : relancer `scripts/install_services.sh` (nouvelle unité), puis redémarrer `birdcam-gallery` et `birdcam-gallery-admin`. Sur le Pi, une copie de `scripts/record_next_motion.py` existe hors git (copie de l'essai du 2026-10-05) : elle fera échouer `git pull` (fichier non suivi) et doit être supprimée avant. Son emplacement exact n'a pas été vérifié.
 
 **Points ouverts sur le clip**, non tranchés, à soumettre à FX :
-- clips visibles publiquement via Funnel. Options : laisser public ; réserver `/clips` à l'admin ; publier après validation ;
-- clips non sauvegardés vers macaron (`backup_usb.sh`) ni purgés, et la suppression admin est définitive ;
+- clips visibles publiquement via Funnel : **tranché par FX le 2026-10-06, ils restent publics** (pas de filtre ni de validation préalable) ;
+- clips sauvegardés vers macaron depuis 85c9a8e (sans `--delete`, une suppression admin reste donc sur macaron), non déployé ; toujours pas de purge des clips sur la clé USB ;
 - aucune protection CSRF sur les POST admin (défaut antérieur au clip) ;
 - durée réelle : 8,9 s mesuré pour environ 12 s attendues (pré-roll 2 s + 10 s), écart non expliqué ;
 - charge thermique de l'encodage pendant l'attente non mesurée (Pi à 81,7 °C le 2026-09-27) ;
