@@ -20,6 +20,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Reconstruction après panne de carte SD, restauration d'une photo ou de `corrections.json` depuis macaron | `RESTORE.md`, `scripts/setup_system.sh` |
 | Entraînement du modèle d'espèces | `training/` (le dataset n'est pas versionné) |
 | Documentation utilisateur | `README.md` |
+| Essai d'un clip vidéo MP4 au prochain mouvement (one-shot, arrête le service, non intégré) | `scripts/record_next_motion.py` |
 | Vérification de `corrections.json` avant sauvegarde, comptage des entrées, copies quotidiennes | `scripts/backup_usb.sh`, test : `bash scripts/test_backup_usb.sh` |
 
 ## Comment déployer ?
