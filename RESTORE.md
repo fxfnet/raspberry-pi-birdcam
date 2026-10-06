@@ -8,7 +8,7 @@ Two situations:
   "Restoring from the macaron backup while the Pi is running".
 
 The backup lives on macaron in `/Users/macaron/birdcam_backups/`
-(`captures/` and `corrections.json`).
+(`captures/`, `clips/` and `corrections.json`).
 
 
 What survives an SD card failure:
@@ -19,7 +19,7 @@ What survives an SD card failure:
 | Species model (`model/garden_birds.onnx`), fine-tune checkpoint | GitHub | yes |
 | MobileNetSSD detector | re-downloaded by `scripts/install_models.sh` | yes |
 | Captures and `corrections.json` | USB drive labelled `birdcam-usb` | yes |
-| Bird pictures and `corrections.json` (not motion pictures) | copied hourly to macaron, `~/birdcam_backups/` | yes, even if the USB drive dies |
+| Bird pictures, video clips and `corrections.json` (not motion pictures) | copied hourly to macaron, `~/birdcam_backups/` | yes, even if the USB drive dies |
 | System configuration (below) | SD card only | rebuilt by `scripts/setup_system.sh` |
 
 ## 1. Flash a new card

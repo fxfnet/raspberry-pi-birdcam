@@ -11,7 +11,8 @@ trap 'rm -rf "${WORK}"' EXIT
 sed 's|^if ! mountpoint -q.*|if false; then|' "${HERE}/backup_usb.sh" > "${WORK}/backup.sh"
 
 export USB_MOUNT="${WORK}/usb" BACKUP_TARGET="${WORK}/dest/" CORRECTIONS_STATE="${WORK}/state"
-mkdir -p "${USB_MOUNT}/captures" "${WORK}/dest"
+mkdir -p "${USB_MOUNT}/captures" "${USB_MOUNT}/clips" "${WORK}/dest"
+touch "${USB_MOUNT}/clips/clip_20261006_092717.mp4" "${USB_MOUNT}/clips/autre.mp4"
 FAIL=0
 
 run() {  # run <contenu de corrections.json ou ABSENT> <code attendu> <contenu attendu sur la cible>
@@ -37,6 +38,8 @@ rm -f "${CORRECTIONS_STATE}"     # restauration voulue d'une version plus courte
 run '[1]'      0 '[1]'
 
 [ "$(ls "${WORK}/dest/captures" | wc -l)" -eq 7 ] || { echo "ECHEC : photos non toutes sauvegardées"; FAIL=1; }
+[ -e "${WORK}/dest/clips/clip_20261006_092717.mp4" ] || { echo "ECHEC : clip non sauvegardé"; FAIL=1; }
+[ ! -e "${WORK}/dest/clips/autre.mp4" ] || { echo "ECHEC : fichier étranger copié depuis clips/"; FAIL=1; }
 ls "${WORK}/dest" | grep -q "corrections_$(date +%F).json" || { echo "ECHEC : copie du jour absente"; FAIL=1; }
 [ "${FAIL}" -eq 0 ] && echo "Tous les tests passent."
 exit "${FAIL}"

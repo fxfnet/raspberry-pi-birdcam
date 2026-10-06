@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Copie les photos d'oiseaux et corrections.json de la clé USB vers macaron.
+# Copie les photos d'oiseaux, les clips vidéo et corrections.json de la clé USB vers macaron.
 #
-# Sans --delete : une photo supprimée depuis l'admin reste dans la sauvegarde.
+# Sans --delete : une photo ou un clip supprimé depuis l'admin reste dans la sauvegarde.
 # Les photos de mouvement (motion_*), purgées après 14 jours, ne sont pas copiées.
 # Lancé toutes les heures par birdcam-backup.timer ; rsync ne transfère que les
 # nouveautés, et une heure où macaron est éteint est rattrapée à la suivante.
@@ -62,6 +62,8 @@ rsync -a \
   --include='captures/' \
   --include='captures/bird_*' \
   --include='captures/star_*' \
+  --include='clips/' \
+  --include='clips/clip_*.mp4' \
   "${FILTER_CORRECTIONS[@]}" \
   --exclude='*' \
   -e "${SSH}" \
