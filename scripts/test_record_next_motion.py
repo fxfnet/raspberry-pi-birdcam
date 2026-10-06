@@ -21,6 +21,9 @@ class Anything:
     def __init__(self, *_args, **_kwargs):
         pass
 
+    def close_output(self):
+        pass
+
 
 for name, attrs in {
     "cv2": {},
@@ -106,9 +109,54 @@ check("stop_recording échoue : close est tout de même appelé", "close" in eve
 unit = (ROOT / "systemd" / "birdcam-clip.service").read_text()
 check("l'unité relance birdcam quelle que soit la sortie",
       re.search(r"^ExecStopPost=\+?/usr/bin/systemctl start .*birdcam\.service", unit, re.M) is not None)
+# Annulation pendant l'enregistrement : la sortie du clip est fermée, donc le MP4 est lisible.
+closed = []
+
+
+class FakeCircular(Anything):
+    def open_output(self, *_):
+        closed.append("open")
+
+    def close_output(self):
+        closed.append("close")
+
+
+class StartableCamera(FakeCamera):
+    def start_recording(self, *_):
+        pass
+
+
+record.CircularOutput2 = FakeCircular
+record.Picamera2 = lambda: StartableCamera([])
+record.motion_gray = lambda _camera: 0
+record.cv2 = types.SimpleNamespace(
+    absdiff=lambda a, b: 0, threshold=lambda *_: (0, 0), countNonZero=lambda _d: 10 ** 6, THRESH_BINARY=0)
+
+
+def sleep(seconds):
+    if seconds == record.CLIP_SECONDS:
+        sigterm()
+
+
+record.time = types.SimpleNamespace(sleep=sleep, monotonic=__import__("time").monotonic)
+record.subprocess.run = lambda *_a, **_k: None
+record.CLIPS_DIR = Path(os.environ["HOME"]) / "clips"
+try:
+    record.main()
+except SystemExit:
+    pass
+check("annulation pendant le clip : la sortie est fermée", closed == ["open", "close"])
+
 limit = re.search(r"^RuntimeMaxSec=(\d+)", unit, re.M)
 check("l'unité borne la durée au-delà de l'attente maximale du script",
-      limit is not None and int(limit.group(1)) > record.MAX_WAIT_SECONDS + record.WARMUP_SECONDS + record.CLIP_SECONDS)
+      limit is not None and int(limit.group(1)) >= 90 + record.MAX_WAIT_SECONDS + record.WARMUP_SECONDS + record.CLIP_SECONDS + 60)
+
+# L'arrêt du clip relance birdcam : il doit être demandé avant celui de birdcam.
+for name in ("scripts/stop_services.sh", "RESTORE.md"):
+    lines = (ROOT / name).read_text().splitlines()
+    clip = next((i for i, l in enumerate(lines) if "systemctl stop birdcam-clip" in l), None)
+    camera = next((i for i, l in enumerate(lines) if re.search(r"systemctl stop birdcam( |$)", l)), None)
+    check(f"{name} : stop birdcam-clip avant stop birdcam", clip is not None and camera is not None and clip < camera)
 
 print("Tous les tests passent." if not FAILURES else f"{len(FAILURES)} échec(s).")
 sys.exit(1 if FAILURES else 0)

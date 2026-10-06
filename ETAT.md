@@ -51,7 +51,7 @@ Fichier non suivi dans le repo : `training/garden_birds_captures.onnx`, doublon 
 - relecture adverse : 3 défauts bloquants (SIGTERM pendant l'arrêt ou le nettoyage laissait la caméra arrêtée ; aucun garde-fou systemd contre SIGKILL ou gel) et plusieurs moyens, corrigés dans 0d79263 (`ExecStopPost`, `RuntimeMaxSec=3720`, garde côté serveur, erreurs affichées) ;
 - tests : `scripts/test_gallery_clips.py`, `scripts/test_record_next_motion.py` (échoue sur la version précédente du script), `scripts/test_gallery_bursts.py` inchangé ; les trois passent.
 
-Pour déployer (sur accord de FX, après fusion) : relancer `scripts/install_services.sh` (nouvelle unité), puis redémarrer `birdcam-gallery` et `birdcam-gallery-admin`. Sur le Pi, une copie de `scripts/record_next_motion.py` existe hors git (copie de l'essai du 2026-10-05) : elle fera échouer `git pull` (fichier non suivi) et doit être supprimée avant. Son emplacement exact n'a pas été vérifié.
+Pour déployer (sur accord de FX, après fusion) : relancer `scripts/install_services.sh` (nouvelle unité), puis redémarrer `birdcam-gallery` et `birdcam-gallery-admin`. Sur le Pi, la copie de l'essai du 2026-10-05 est dans `/tmp/record_next_motion.py` (vérifié le 2026-10-06), hors du repo : elle ne gêne pas `git pull` et disparaîtra au redémarrage.
 
 **Points ouverts sur le clip**, non tranchés, à soumettre à FX :
 - clips visibles publiquement via Funnel : **tranché par FX le 2026-10-06, ils restent publics** (pas de filtre ni de validation préalable) ;

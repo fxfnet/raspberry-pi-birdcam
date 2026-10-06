@@ -72,6 +72,7 @@ def main():
     CLIPS_DIR.mkdir(exist_ok=True)
 
     picam2 = None
+    circular = None
     try:
         log("Arrêt de la capture photo")
         systemctl("stop")
@@ -109,12 +110,16 @@ def main():
         # sauter la relance de la capture photo.
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
+        # Annulation pendant l'enregistrement : sans cette fermeture, le clip
+        # resterait un MP4 sans index, publié puis sauvegardé tel quel.
+        steps = [circular.close_output] if circular is not None else []
         if picam2 is not None:
-            for step in (picam2.stop_recording, picam2.close):
-                try:
-                    step()
-                except Exception as error:
-                    log(f"Arrêt de la caméra : {error}")
+            steps += [picam2.stop_recording, picam2.close]
+        for step in steps:
+            try:
+                step()
+            except Exception as error:
+                log(f"Arrêt de la caméra : {error}")
         log("Relance de la capture photo")
         systemctl("start")
 

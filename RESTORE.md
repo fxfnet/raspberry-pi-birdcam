@@ -123,10 +123,12 @@ Stopping the timer alone does not stop an `rsync` already running.
 ### 2. Stop what writes to the drive
 
 ```bash
+sudo systemctl stop birdcam-clip
 sudo systemctl stop birdcam birdcam-gallery-admin birdcam-restart.timer
 ```
 
-`birdcam` writes captures; the admin renames and deletes photos and appends to
+`birdcam-clip` first, in its own command: stopping it starts `birdcam` again, so
+it must be gone before `birdcam` is stopped. `birdcam` writes captures; the admin renames and deletes photos and appends to
 `corrections.json`; the restart timer would start `birdcam` again at 03:00. The
 public gallery only reads and can keep running.
 

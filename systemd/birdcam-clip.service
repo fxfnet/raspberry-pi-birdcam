@@ -7,8 +7,8 @@ Type=simple
 User=fxf
 ExecStart=/usr/bin/python3 /home/fxf/birdcam/scripts/record_next_motion.py
 TimeoutStopSec=30
-# Attente maximale du script (3600 s) + préchauffage + clip + marge : borne un gel de la caméra.
-RuntimeMaxSec=3720
+# Arrêt de birdcam (jusqu'à 90 s) + attente maximale du script (3600 s) + préchauffage + clip + marge : borne un gel de la caméra.
+RuntimeMaxSec=3900
 # Quelle que soit la sortie (SIGKILL, gel, plantage), la capture photo repart.
 # Le préfixe + exécute la commande en root, sans sudo.
 ExecStopPost=+/usr/bin/systemctl start --no-block birdcam.service
