@@ -1,6 +1,9 @@
 [Unit]
 Description=Birdcam clip of the next motion (one shot, started from the admin gallery)
-After=network.target
+After=network.target birdcam.service
+# Les deux se disputent la caméra : démarrer l'un arrête l'autre. Un restart de birdcam
+# (minuterie de 03:00, déploiement) annule donc le clip au lieu de boucler en échec.
+Conflicts=birdcam.service
 
 [Service]
 Type=simple

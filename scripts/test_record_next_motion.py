@@ -147,6 +147,8 @@ except SystemExit:
     pass
 check("annulation pendant le clip : la sortie est fermée", closed == ["open", "close"])
 
+check("l'unité entre en conflit avec birdcam (un restart de birdcam annule le clip)",
+      re.search(r"^Conflicts=.*birdcam\.service", unit, re.M) is not None)
 limit = re.search(r"^RuntimeMaxSec=(\d+)", unit, re.M)
 check("l'unité borne la durée au-delà de l'attente maximale du script",
       limit is not None and int(limit.group(1)) >= 90 + record.MAX_WAIT_SECONDS + record.WARMUP_SECONDS + record.CLIP_SECONDS + 60)
