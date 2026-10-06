@@ -90,7 +90,7 @@ Décisions de FX (2026-10-06) : clips publics ; sauvegarde des clips vers macaro
 - Le modèle v2 a reconnu ses premières mésanges charbonnières les 28 et 29/09 (spconf 0,88 à 0,90).
 - Lecture du dossier de captures : environ 150 à 200 ms sur le Pi pour 650 à 780 fichiers (mesures 0a61eef et 4b89298).
 - Essai de clip du 2026-10-06 : lancé sur le Pi à 08:00:09, mouvement à 09:27:17 (score 991), clip `/mnt/birdcam-usb/clips/clip_20261006_092717.mp4`, 4,4 Mo, H.264 1280x960, 8,9 s. Capture photo relancée à 09:27:30, service `birdcam` actif. Pendant l'attente (environ 87 min), aucune photo n'a été prise : la caméra ne sert qu'à un programme à la fois. Clip copié sur le Mac dans `~/Movies/birdcam/`. Contenu non jugé.
-- Essais du clip par le vrai chemin le 2026-10-06 au soir : voir « Essais réels » plus haut. Constats : le conflit arrête et relance `birdcam` comme prévu (arrêt environ 6 min dans l'essai 1, attente comprise), un `systemctl kill` de toute l'unité laisse `birdcam` arrêté (cgroup entier tué, `ExecStopPost` compris), un kill du seul processus principal est rattrapé.
+- Essais du clip par le vrai chemin le 2026-10-06 au soir : voir « Essais réels » plus haut. Constats : le conflit arrête et relance `birdcam` comme prévu, un `systemctl kill` de toute l'unité laisse `birdcam` arrêté (cgroup entier tué, `ExecStopPost` compris), un kill du seul processus principal est rattrapé.
 - Hors repo : `~/.ssh/known_hosts` et le bloc `Host oaso.local` de `~/.ssh/config` corrigés côté Mac.
 
 ## Quels paris sont engagés ?
