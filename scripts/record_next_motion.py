@@ -10,8 +10,9 @@ de PRE_ROLL_MS de tampon circulaire, puis relance birdcam.service dans tous
 les cas (clip pris, délai dépassé, erreur, SIGTERM ou déconnexion SSH).
 Pendant l'attente, aucune photo n'est prise.
 
-Usage sur le Pi (détaché, survit à la fin de la session SSH) :
-    nohup python3 ~/birdcam/scripts/record_next_motion.py > /tmp/clip.log 2>&1 &
+Lancé par le bouton de la galerie admin, via birdcam-clip.service :
+    sudo systemctl start --no-block birdcam-clip
+Annulation : sudo systemctl stop birdcam-clip (la capture photo repart).
 """
 import signal
 import subprocess
@@ -25,10 +26,11 @@ from picamera2 import Picamera2
 from picamera2.encoders import H264Encoder
 from picamera2.outputs import CircularOutput2, PyavOutput
 
-CLIPS_DIR = Path("/mnt/birdcam-usb/clips")
+# Même règle que gallery/app.py : à côté des captures, sur la clé USB.
+CLIPS_DIR = (Path.home() / "birdcam" / "captures").resolve().parent / "clips"
 CLIP_SECONDS = 10
 PRE_ROLL_MS = 2000
-MAX_WAIT_SECONDS = 2 * 3600
+MAX_WAIT_SECONDS = 3600
 WARMUP_SECONDS = 3
 
 VIDEO_SIZE = (1280, 960)

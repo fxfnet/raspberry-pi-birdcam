@@ -31,6 +31,10 @@ sed "s/^User=.*/User=${USER_NAME}/; s|/home/fxf/|${HOME}/|g" \
   "${PROJECT_DIR}/systemd/birdcam-backup.service" \
   | sudo tee /etc/systemd/system/birdcam-backup.service >/dev/null
 
+sed "s/^User=.*/User=${USER_NAME}/; s|/home/fxf/|${HOME}/|g" \
+  "${PROJECT_DIR}/systemd/birdcam-clip.service" \
+  | sudo tee /etc/systemd/system/birdcam-clip.service >/dev/null
+
 sudo cp "${PROJECT_DIR}/systemd/birdcam-purge.timer" /etc/systemd/system/birdcam-purge.timer
 sudo cp "${PROJECT_DIR}/systemd/birdcam-restart.service" /etc/systemd/system/birdcam-restart.service
 sudo cp "${PROJECT_DIR}/systemd/birdcam-restart.timer" /etc/systemd/system/birdcam-restart.timer

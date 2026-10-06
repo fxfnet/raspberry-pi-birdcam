@@ -22,6 +22,10 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=0, x_proto=1)
 
 CAPTURE_DIR = Path.home() / "birdcam" / "captures"
 THUMB_DIR = Path.home() / "birdcam" / "gallery" / "thumbs"
+# À côté des captures, donc sur la clé USB quand captures/ est un lien vers elle.
+CLIPS_DIR = CAPTURE_DIR.resolve().parent / "clips"
+CLIP_SERVICE = "birdcam-clip"
+CLIP_NAME_RE = re.compile(r"^clip_(\d{8})_(\d{6})\.mp4$")
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
@@ -990,6 +994,7 @@ HTML_TEMPLATE = """
         {% if mode == 'species' and species_query %}
         <a class="filter active" href="/?filter=bird&per_page={{ per_page }}">× {{ species_query }}</a>
         {% endif %}
+        <a class="filter" href="/clips">Clips</a>
         <a class="filter" href="/stats">Stats</a>
     </div>
 
@@ -1021,6 +1026,24 @@ HTML_TEMPLATE = """
                 Test Camera
             </button>
         </form>
+
+        {% if status.clip_waiting %}
+        <div class="status-item">
+            <span class="status-dot bad"></span>
+            Clip : en attente d'un mouvement, aucune photo n'est prise
+        </div>
+        <form method="post" action="/clip/cancel">
+            <button type="submit" class="camera-toggle-button stop">
+                Annuler le clip
+            </button>
+        </form>
+        {% elif status.birdcam_service.active %}
+        <form method="post" action="/clip/request">
+            <button type="submit" class="camera-toggle-button test">
+                Faire une vidéo du prochain mouvement détecté
+            </button>
+        </form>
+        {% endif %}
 
         {% if status.camera_test %}
         <div class="status-item">
@@ -1535,6 +1558,93 @@ VIEW_TEMPLATE = """
         if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx > 0 ? prev : next);
     });
 </script>
+</body>
+</html>
+"""
+
+
+CLIPS_TEMPLATE = """
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }} · Clips</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            --bg: #0d1110;
+            --panel: #171d1b;
+            --border: #34413b;
+            --text: #f2f1e8;
+            --muted: #a9b3ad;
+            --bird: #5fd38d;
+            --danger: #e46d5d;
+        }
+        body {
+            margin: 0;
+            padding: 1rem;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        a { color: var(--bird); }
+        h1 { font-size: 1.3rem; margin: 0 0 0.5rem; }
+        .notice { color: var(--muted); margin: 0.5rem 0 1rem; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+            gap: 1rem;
+        }
+        .clip {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0.6rem;
+        }
+        .clip video { width: 100%; border-radius: 8px; background: #000; }
+        .clip-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.4rem;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+        .clip button {
+            background: var(--danger);
+            color: #111;
+            border: none;
+            border-radius: 999px;
+            padding: 0.3rem 0.7rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Clips</h1>
+    <a href="/">← Galerie</a>
+    {% if waiting %}
+    <p class="notice">Un clip est en attente du prochain mouvement. Aucune photo n'est prise pendant ce temps.</p>
+    {% endif %}
+    {% if not clips %}
+    <p class="notice">Aucun clip pour le moment.</p>
+    {% endif %}
+    <div class="grid">
+        {% for clip in clips %}
+        <div class="clip">
+            <video controls preload="metadata" src="/clip/{{ clip.name }}"></video>
+            <div class="clip-meta">
+                <span>{{ clip.date }} · {{ clip.size_mb }} Mo</span>
+                {% if admin_mode %}
+                <form method="post" action="/clip/delete/{{ clip.name }}">
+                    <button type="submit">Supprimer</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 </body>
 </html>
 """
@@ -2261,6 +2371,7 @@ def build_status(all_images):
 
     return {
         "birdcam_service": service_status("birdcam"),
+        "clip_waiting": service_status(CLIP_SERVICE)["active"],
         "camera_test": read_camera_test_status(),
         "bird_count": sum(1 for image in all_images if image["kind"] == "bird"),
         "motion_count": sum(1 for image in all_images if image["kind"] == "motion"),
@@ -2926,6 +3037,84 @@ def camera_test_image():
     return send_from_directory(
         CAMERA_TEST_IMAGE_PATH.parent, CAMERA_TEST_IMAGE_PATH.name
     )
+
+
+def list_clips():
+    if not CLIPS_DIR.exists():
+        return []
+
+    clips = []
+    for path in CLIPS_DIR.iterdir():
+        match = CLIP_NAME_RE.match(path.name)
+        if not match or not path.is_file():
+            continue
+        taken = datetime.strptime(match.group(1) + match.group(2), "%Y%m%d%H%M%S")
+        clips.append({
+            "name": path.name,
+            "date": taken.strftime("%Y-%m-%d %H:%M:%S"),
+            "size_mb": f"{path.stat().st_size / (1024 ** 2):.1f}",
+        })
+
+    clips.sort(key=lambda clip: clip["name"], reverse=True)
+    return clips
+
+
+def safe_clip_name(filename):
+    if not CLIP_NAME_RE.match(filename) or not (CLIPS_DIR / filename).is_file():
+        abort(404)
+    return filename
+
+
+@app.route("/clips")
+def clips_page():
+    return render_template_string(
+        CLIPS_TEMPLATE,
+        clips=list_clips(),
+        waiting=service_status(CLIP_SERVICE)["active"],
+        admin_mode=ADMIN_MODE,
+    )
+
+
+@app.route("/clip/<path:filename>")
+def clip_file(filename):
+    # send_from_directory gère les requêtes Range, nécessaires à la lecture dans le navigateur.
+    return send_from_directory(CLIPS_DIR, safe_clip_name(filename), mimetype="video/mp4")
+
+
+@app.route("/clip/request", methods=["POST"])
+def clip_request():
+    require_admin()
+
+    # Le clip rend la caméra à la capture photo en finissant : on ne le lance
+    # pas si la caméra a été arrêtée volontairement, ni s'il attend déjà.
+    if service_status("birdcam")["active"] and not service_status(CLIP_SERVICE)["active"]:
+        subprocess.run(
+            ["sudo", "systemctl", "start", "--no-block", CLIP_SERVICE],
+            capture_output=True,
+            timeout=5,
+        )
+
+    return redirect(url_for("index"))
+
+
+@app.route("/clip/cancel", methods=["POST"])
+def clip_cancel():
+    require_admin()
+
+    subprocess.run(
+        ["sudo", "systemctl", "stop", CLIP_SERVICE],
+        capture_output=True,
+        timeout=30,
+    )
+
+    return redirect(url_for("index"))
+
+
+@app.route("/clip/delete/<path:filename>", methods=["POST"])
+def clip_delete(filename):
+    require_admin()
+    (CLIPS_DIR / safe_clip_name(filename)).unlink()
+    return redirect(url_for("clips_page"))
 
 
 @app.route("/stats")

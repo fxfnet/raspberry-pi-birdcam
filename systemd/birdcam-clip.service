@@ -1,0 +1,9 @@
+[Unit]
+Description=Birdcam clip of the next motion (one shot, started from the admin gallery)
+After=network.target
+
+[Service]
+Type=simple
+User=fxf
+ExecStart=/usr/bin/python3 /home/fxf/birdcam/scripts/record_next_motion.py
+TimeoutStopSec=30
