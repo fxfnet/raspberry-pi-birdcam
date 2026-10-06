@@ -71,10 +71,15 @@ class FakeCamera:
         self.events.append("close")
 
 
+COMMANDS = []
+
+
 def run(on_systemctl=None, on_stop_recording=None):
     events = []
+    COMMANDS.clear()
 
     def fake_run(cmd, **_kw):
+        COMMANDS.append(cmd)
         events.append("systemctl " + cmd[2])
         if on_systemctl and cmd[2] == "stop":
             on_systemctl()
@@ -95,6 +100,9 @@ def sigterm():
 
 events = run()
 check("erreur en cours de route : la capture photo repart", events[-1] == "systemctl start")
+# Sans --no-block, le start de birdcam attendrait la fin du clip, qui attend la fin du script.
+check("le start de birdcam est sans attente (--no-block)",
+      COMMANDS[-1] == ["sudo", "systemctl", "start", "--no-block", "birdcam"])
 
 events = run(on_systemctl=sigterm)
 check("SIGTERM pendant l'arrêt de birdcam : la capture photo repart", events[-1] == "systemctl start")
@@ -107,8 +115,11 @@ events = run(on_stop_recording=lambda: (_ for _ in ()).throw(RuntimeError("gel")
 check("stop_recording échoue : close est tout de même appelé", "close" in events and events[-1] == "systemctl start")
 
 unit = (ROOT / "systemd" / "birdcam-clip.service").read_text()
-check("l'unité relance birdcam quelle que soit la sortie",
-      re.search(r"^ExecStopPost=\+?/usr/bin/systemctl start .*birdcam\.service", unit, re.M) is not None)
+check("l'unité relance birdcam sans attente, quelle que soit la sortie",
+      re.search(r"^ExecStopPost=\+?/usr/bin/systemctl start --no-block birdcam\.service", unit, re.M) is not None)
+# Conflicts= n'ordonne rien : sans After=, birdcam démarrerait pendant l'arrêt du clip et boucler en échec.
+check("l'unité est ordonnée après birdcam",
+      re.search(r"^After=.*\bbirdcam\.service", unit, re.M) is not None)
 # Annulation pendant l'enregistrement : la sortie du clip est fermée, donc le MP4 est lisible.
 closed = []
 
