@@ -2,7 +2,7 @@
 
 > État partagé du projet. Toute session ou tout agent, quel que soit le modèle, le lit en premier et le met à jour en dernier (rôle de l'archiviste). La carte du projet est `AGENTS.md`. Ce dépôt n'a pas de `DECISIONS.md` : les décisions et leurs motifs sont dans les messages de commit.
 
-Dernière mise à jour : 2026-10-06 par Claude (session Claude Code, archivage de fin de session)
+Dernière mise à jour : 2026-10-06 par Claude (archiviste, bouton de clip sur `agent/clip-video`)
 
 ## Quel est l'objectif ?
 
@@ -43,14 +43,24 @@ Chaque changement a été relu par l'agent adversaire avant fusion.
 
 Fichier non suivi dans le repo : `training/garden_birds_captures.onnx`, doublon exact de `model/garden_birds.onnx`. Ne pas le supprimer sans accord de FX.
 
-**Essai en cours sur la branche `agent/clip-video`** (commit e2b1daa, non fusionné dans `main`, non poussé) : clip vidéo déclenché par mouvement, `scripts/record_next_motion.py`. Écrit le 2026-10-05 et copié sur le Pi hors du flux git, ce qui contrevient à la règle « modifier le repo puis déployer » : la copie du Pi n'est pas installée proprement. Le script arrête `birdcam.service`, attend un mouvement, enregistre 10 s précédées de 2 s de pré-roll, puis relance toujours le service. Aucune décision prise sur son intégration.
+**Bouton de clip vidéo, sur la branche `agent/clip-video`** (commits e2b1daa, 7cac83c, 0d79263 ; non fusionné dans `main`, non poussé, **non déployé sur le Pi**, bouton jamais essayé sur le Pi). Le 2026-10-06, le script d'essai `scripts/record_next_motion.py` a été intégré à la galerie admin :
+- bouton admin « Faire une vidéo du prochain mouvement détecté » : lance `birdcam-clip.service`, attente d'1 h au plus, clip de 10 s, retour à la capture photo ;
+- bouton « Annuler le clip » pendant l'attente ; bouton absent si la caméra est arrêtée volontairement (le script la relancerait) ; Start/Test Camera masqués pendant l'attente ;
+- page `/clips` (lecture publique, suppression admin), clips dans `clips/` à côté de `captures/` (clé USB) ;
+- choix de FX : bouton réservé à l'admin, attente d'1 h, section séparée « Clips » ;
+- relecture adverse : 3 défauts bloquants (SIGTERM pendant l'arrêt ou le nettoyage laissait la caméra arrêtée ; aucun garde-fou systemd contre SIGKILL ou gel) et plusieurs moyens, corrigés dans 0d79263 (`ExecStopPost`, `RuntimeMaxSec=3720`, garde côté serveur, erreurs affichées) ;
+- tests : `scripts/test_gallery_clips.py`, `scripts/test_record_next_motion.py` (échoue sur la version précédente du script), `scripts/test_gallery_bursts.py` inchangé ; les trois passent.
 
-**Points ouverts sur l'essai de clip** :
-- durée de 8,9 s au lieu des 10 s attendues, écart non expliqué ;
-- script non fusionné dans `main`, non installé proprement sur le Pi ;
-- intégration au service non décidée (clip en continu ou non) ;
-- charge sur le Pi 3B, déjà à 81,7 °C le 2026-09-27 ;
-- le clip n'a pas encore été jugé par FX : on ignore s'il contient un oiseau.
+Pour déployer (sur accord de FX, après fusion) : relancer `scripts/install_services.sh` (nouvelle unité), puis redémarrer `birdcam-gallery` et `birdcam-gallery-admin`. Sur le Pi, une copie de `scripts/record_next_motion.py` existe hors git (copie de l'essai du 2026-10-05) : elle fera échouer `git pull` (fichier non suivi) et doit être supprimée avant. Son emplacement exact n'a pas été vérifié.
+
+**Points ouverts sur le clip**, non tranchés, à soumettre à FX :
+- clips visibles publiquement via Funnel. Options : laisser public ; réserver `/clips` à l'admin ; publier après validation ;
+- clips non sauvegardés vers macaron (`backup_usb.sh`) ni purgés, et la suppression admin est définitive ;
+- aucune protection CSRF sur les POST admin (défaut antérieur au clip) ;
+- durée réelle : 8,9 s mesuré pour environ 12 s attendues (pré-roll 2 s + 10 s), écart non expliqué ;
+- charge thermique de l'encodage pendant l'attente non mesurée (Pi à 81,7 °C le 2026-09-27) ;
+- si un redémarrage de `birdcam` (minuterie de 03:00, déploiement) tombe pendant l'attente, `birdcam` échoue en boucle sur la caméra occupée jusqu'à la fin du clip ; la minuterie n'a pas été adaptée ;
+- le clip d'essai du 2026-10-06 n'a pas été jugé par FX : on ignore s'il contient un oiseau.
 
 ## Qu'a appris le terrain ?
 
@@ -76,5 +86,4 @@ Options à soumettre à FX, non tranchées :
 - comparer quelques jours de photos avant et après la pose courte (bruit par temps gris, confiance d'espèce) via `journalctl -u birdcam | grep Exposition` ;
 - vérifier au matin l'absence de lignes WATCHDOG ;
 - exécuter `setup_system.sh` de bout en bout (jamais testé complet).
-- clip vidéo, options à trancher par FX : (a) abandonner l'essai ; (b) garder le script one-shot, le fusionner et l'installer proprement via le repo ; (c) intégrer au service, sans photo manquée pendant l'attente (à concevoir, car la caméra ne sert qu'à un programme à la fois) ; juger d'abord le clip copié dans `~/Movies/birdcam/` ;
-- enquêter sur l'écart 8,9 s contre 10 s avant toute intégration.
+- clip vidéo : arbitrer les points ouverts ci-dessus (visibilité publique, sauvegarde et purge, redémarrage de 03:00, CSRF), puis décider de la fusion et du déploiement ; mesurer la température pendant une attente et expliquer l'écart de durée avant déploiement.
