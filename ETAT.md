@@ -2,7 +2,7 @@
 
 > État partagé du projet. Toute session ou tout agent, quel que soit le modèle, le lit en premier et le met à jour en dernier (rôle de l'archiviste). La carte du projet est `AGENTS.md`. Ce dépôt n'a pas de `DECISIONS.md` : les décisions et leurs motifs sont dans les messages de commit.
 
-Dernière mise à jour : 2026-10-06 par Claude (archiviste, clip fusionné et déployé partiellement)
+Dernière mise à jour : 2026-10-06 par Claude (archiviste, unité du clip installée par lien symbolique, aucun essai réel)
 
 ## Quel est l'objectif ?
 
@@ -21,7 +21,7 @@ Un agent n'est jamais responsable d'un arbitrage : il propose, FX tranche.
 
 ## Où en est-on ?
 
-Le Pi est à jour avec `main` (HEAD `ae690e1`), sauf l'unité `birdcam-clip.service` (voir plus bas). Déployé et vérifié depuis, tous fusionnés par accord explicite de FX :
+Le Pi est à jour avec `main` (HEAD `895d759`, `git pull` fait le 2026-10-06). Déployé et vérifié depuis, tous fusionnés par accord explicite de FX :
 
 - **2026-09-27** (604597b à c6fcd3d) : restauration depuis macaron (`RESTORE.md`), contrôle de `corrections.json` avant sauvegarde dans `scripts/backup_usb.sh`, copies quotidiennes. Déployé sur le Pi le matin même. `scripts/test_backup_usb.sh` passe sur le Pi (7/7). Sauvegarde vérifiée sur macaron (`corrections_2026-09-27.json` présent).
 - **2026-09-27** (51784a0 + 4e3bc4f) : watchdog interne basé sur `SensorTimestamp` (l'ancien critère « aucun pixel changé 20 min » avait causé 25 relances à tort en 5 jours, la nuit et par temps calme). Angle mort accepté : images identiques avec horodatage qui avance.
@@ -43,7 +43,7 @@ Chaque changement a été relu par l'agent adversaire avant fusion.
 
 Fichier non suivi dans le repo : `training/garden_birds_captures.onnx`, doublon exact de `model/garden_birds.onnx`. Ne pas le supprimer sans accord de FX.
 
-**Bouton de clip vidéo : fusionné et déployé partiellement le 2026-10-06** (e2b1daa, 7cac83c, 0d79263, 85c9a8e, ae690e1). Sur ordre de FX : fusion en fast-forward dans `main`, poussé (HEAD `ae690e1`), après deux passes de relecture adverse à contexte vierge (la seconde sans défaut bloquant). Le script d'essai `scripts/record_next_motion.py` est intégré à la galerie admin :
+**Bouton de clip vidéo : fusionné le 2026-10-06, unité installée sur le Pi, jamais essayé en réel** (e2b1daa, 7cac83c, 0d79263, 85c9a8e, ae690e1, puis af7e569, 0f08450, fusion 895d759). Sur ordre de FX : fusion dans `main`, poussé (HEAD `895d759`), après deux passes de relecture adverse à contexte vierge (la seconde sans défaut bloquant). Le script d'essai `scripts/record_next_motion.py` est intégré à la galerie admin :
 - bouton admin « Faire une vidéo du prochain mouvement détecté » : lance `birdcam-clip.service`, attente d'1 h au plus, clip de 10 s, retour à la capture photo ;
 - bouton « Annuler le clip » pendant l'attente ; bouton absent si la caméra est arrêtée volontairement (le script la relancerait) ; Start/Test Camera masqués pendant l'attente ;
 - page `/clips` (lecture publique, suppression admin), clips dans `clips/` à côté de `captures/` (clé USB) ;
@@ -54,12 +54,22 @@ Fichier non suivi dans le repo : `training/garden_birds_captures.onnx`, doublon 
 
 **Déploiement sur le Pi (oaso), fait le 2026-10-06** : `git pull` (HEAD `ae690e1`), `birdcam-gallery` et `birdcam-gallery-admin` redémarrés, `birdcam` non touché et actif. Les quatre fichiers de tests passent sur le Pi. `/clips` répond 200 en public, `clip_20261006_092717.mp4` est servi en lecture partielle (206), l'admin répond.
 
-**Non terminé** : l'unité `birdcam-clip.service` n'est **pas installée** sur le Pi. `scripts/install_services.sh` utilise `sudo tee`, qui exige un mot de passe (sur le Pi, seuls `systemctl` et `journalctl` sont en NOPASSWD). Tant que ce n'est pas fait, le bouton répond « Le clip n'a pas pu être lancé » avec le motif (502), sans autre effet. **Aucun essai réel du bouton n'a eu lieu.** Le premier passage horaire de sauvegarde enverra sur macaron le clip d'essai de 4,4 Mo (premier envoi de clip, non encore observé).
+**Installation de l'unité (2026-10-06)** : `install_services.sh` exige un mot de passe sudo (`sudo tee`) que l'agent n'a pas. FX a choisi `sudo systemctl link /home/fxf/birdcam/systemd/birdcam-clip.service` : `/etc/systemd/system/birdcam-clip.service` est un lien symbolique vers le fichier du repo sur le Pi. **Écart assumé par FX par rapport à la procédure documentée.** Conséquences :
+- tout `git pull` modifie l'unité en direct ; un `systemctl daemon-reload` est nécessaire pour que systemd la relise ;
+- `install_services.sh` lancé ensuite écrira à travers le lien, avec un contenu identique ;
+- retour arrière : `sudo systemctl disable birdcam-clip`.
+
+Vérifié : `LoadState=loaded`, `ActiveState=inactive`, `Conflicts=birdcam.service`, `After` contient `birdcam.service`, `ExecStopPost` avec `--no-block`, `RuntimeMaxUSec=1h 5min`, `User=fxf` ; `birdcam` reste actif.
+
+**Non fait** : aucun essai réel du bouton ni du restart pendant l'attente (ils coupent la capture photo quelques dizaines de secondes et demandent l'accord explicite de FX). Le premier envoi du clip d'essai (4,4 Mo) vers macaron au prochain passage horaire de sauvegarde n'a pas été observé.
+
+**Anomalie non expliquée** : `systemctl show birdcam -p ConflictedBy` renvoie une valeur vide, alors que l'adversaire attendait `birdcam-clip.service`. Le comportement de conflit n'est donc pas confirmé : seul un essai réel le confirmera.
 
 Décisions de FX (2026-10-06) : clips publics ; sauvegarde des clips vers macaron ; bouton réservé à l'admin ; attente d'1 h ; section séparée « Clips ». La copie de l'essai du 2026-10-05 était dans `/tmp/record_next_motion.py` sur le Pi, hors repo : elle ne gêne pas `git pull`.
 
 **Points ouverts sur le clip**, non tranchés, à soumettre à FX :
-- redémarrage de `birdcam` pendant l'attente d'un clip (minuterie de 03:00, déploiement) : `birdcam` échoue en boucle sur la caméra occupée jusqu'à 1 h. Options : (a) `Conflicts=birdcam.service` dans l'unité clip ; (b) condition sur `birdcam-restart.service` ; (c) simple consigne dans `AGENTS.md` ;
+- redémarrage de `birdcam` pendant l'attente d'un clip : **résolu par le choix de FX, sous réserve d'un essai réel non fait**. FX a retenu `Conflicts=birdcam.service` avec `After=` dans `birdcam-clip.service` : le restart annule le clip (af7e569). Relecture adverse : aucun chemin ne laisse `birdcam` arrêté ; trois verrous de test ajoutés (0f08450 : `After=`, `--no-block` de l'`ExecStopPost` et du start dans le script). Voir l'anomalie `ConflictedBy` ci-dessus ;
+- **risque accepté (décision de FX, 2026-10-06), dit D5** : si le démarrage du clip échoue juste après l'arrêt de `birdcam` (`StartLimitBurst` atteint, ou annulation dans les 0,1 s), `birdcam` reste arrêté jusqu'à 03:00. Inaccessible depuis la galerie, seulement en ligne de commande. FX ne fait rien. Options écartées : `StartLimitIntervalSec=0`, `OnFailure=birdcam.service`. Déclencheur de révision non fixé ;
 - durée réelle : 8,9 s mesuré pour environ 12 s attendues (pré-roll 2 s + 10 s) ; piste `iperiod` de `H264Encoder` non vérifiée ;
 - le clip est enregistré sans la pose courte : plus de flou possible ;
 - charge thermique de l'encodage pendant l'attente non mesurée (Pi à 81,7 °C le 2026-09-27) ;
@@ -86,10 +96,14 @@ Un pari est un investissement de temps, d'effort ou d'argent sur une évaluation
 
 ## Quelle est la prochaine action ?
 
-1. **FX : installer l'unité du clip sur le Pi** : `ssh -t birdcam 'cd ~/birdcam && bash scripts/install_services.sh'` (mot de passe sudo requis). Puis essayer le bouton une fois pour de bon (aucun essai réel à ce jour) et vérifier le premier envoi de clip vers macaron.
+1. **FX : décider des essais réels de l'unité du clip** (chacun coupe la capture photo quelques dizaines de secondes), puis observer le premier envoi de clip vers macaron.
 
 Options à soumettre à FX, non tranchées :
-- clip vidéo : arbitrer les points ouverts ci-dessus (redémarrage de 03:00, CSRF, purge) ; mesurer la température pendant une attente et expliquer l'écart de durée ;
+- essai réel du bouton : clic, mouvement, clip dans `/clips`, retour de `birdcam` ;
+- essai du restart de `birdcam` pendant l'attente (confirme ou non le conflit) ;
+- essai du plantage forcé (`kill -KILL` du clip) ;
+- explorer la valeur vide de `ConflictedBy` ;
+- clip vidéo, points restants : durée 8,9 s pour 12 s (piste `iperiod`), absence de pose courte, charge thermique pendant l'attente, CSRF, pas de purge des clips ;
 - régler la mise au point de l'objectif sur environ 15 cm (assistant de netteté proposé, non fait) et coller l'objectif à la vitre avec un cache noir ;
 - poser un dissipateur ;
 - comparer quelques jours de photos avant et après la pose courte (bruit par temps gris, confiance d'espèce) via `journalctl -u birdcam | grep Exposition` ;

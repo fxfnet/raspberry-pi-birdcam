@@ -28,6 +28,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 - Pi : `oaso.local`, utilisateur **`fxf`** (et non `fx` : décalage corrigé dans le commit 1923f45).
 - Code dans `/home/fxf/birdcam` sur le Pi. Déploiement : `git pull` sur le Pi, puis `sudo systemctl restart birdcam birdcam-gallery birdcam-gallery-admin`.
 - `scripts/install_services.sh` utilise `sudo tee` : sur le Pi seuls `systemctl` et `journalctl` sont en NOPASSWD, donc FX le lance lui-même : `ssh -t birdcam 'cd ~/birdcam && bash scripts/install_services.sh'`.
+- Exception actuelle : sur le Pi, `/etc/systemd/system/birdcam-clip.service` est un lien symbolique (`systemctl link`) vers `/home/fxf/birdcam/systemd/birdcam-clip.service`, faute de sudo pour `install_services.sh`. Après un `git pull` qui change cette unité, lancer `sudo systemctl daemon-reload`. Détail et retour arrière dans `ETAT.md`.
 - Pour arrêter la capture, arrêter `birdcam-clip` avant `birdcam` (`scripts/stop_services.sh` le fait).
 - Ne jamais éditer directement sur le Pi : modifier le repo, puis déployer.
 - Logs : `journalctl -u birdcam -f`.
