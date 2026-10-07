@@ -126,7 +126,6 @@ Options à soumettre à FX, non tranchées :
 - pas de purge des clips ;
 - observer le premier envoi d'un clip vers macaron ;
 - filet contre un kill de toute l'unité clip (`OnFailure=`, minuterie de garde, ou rien) ;
-- fusionner la branche `agent/etat-clip-install` dans `main` ;
 - régler la mise au point de l'objectif sur environ 15 cm (assistant de netteté proposé, non fait) et coller l'objectif à la vitre avec un cache noir ;
 - poser un dissipateur ;
 - comparer quelques jours de photos avant et après la pose courte (bruit par temps gris, confiance d'espèce) via `journalctl -u birdcam | grep Exposition` ;
