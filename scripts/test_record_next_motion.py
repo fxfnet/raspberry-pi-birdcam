@@ -9,11 +9,13 @@ import importlib.util
 import os
 import re
 import signal
+import subprocess
 import sys
 import tempfile
 import types
 from pathlib import Path
 
+REAL_RUN = subprocess.run  # les tests remplacent subprocess.run, partagé avec le script
 ROOT = Path(__file__).resolve().parent.parent
 os.environ["HOME"] = tempfile.mkdtemp()
 
@@ -138,6 +140,9 @@ class StartableCamera(FakeCamera):
 
 
 record.CircularOutput2 = FakeCircular
+fixed_clips = []
+record.PyavOutput = lambda path: Path(path).write_bytes(b"mp4")  # crée le fichier du clip
+record.fix_clip = fixed_clips.append
 record.Picamera2 = lambda: StartableCamera([])
 record.motion_gray = lambda _camera: 0
 record.cv2 = types.SimpleNamespace(
@@ -157,12 +162,64 @@ try:
 except SystemExit:
     pass
 check("annulation pendant le clip : la sortie est fermée", closed == ["open", "close"])
+check("annulation pendant le clip : le clip fermé est tout de même corrigé pour iOS",
+      len(fixed_clips) == 1 and fixed_clips[0].name.startswith("clip_"))
 
 check("l'unité entre en conflit avec birdcam (un restart de birdcam annule le clip)",
       re.search(r"^Conflicts=.*birdcam\.service", unit, re.M) is not None)
 limit = re.search(r"^RuntimeMaxSec=(\d+)", unit, re.M)
 check("l'unité borne la durée au-delà de l'attente maximale du script",
       limit is not None and int(limit.group(1)) >= 90 + record.MAX_WAIT_SECONDS + record.WARMUP_SECONDS + record.CLIP_SECONDS + 60)
+
+# fix_clip : conteneur reconstruit d'après le flux réel (iOS), clip d'origine gardé en cas d'échec.
+spec2 = importlib.util.spec_from_file_location("record_real", ROOT / "scripts" / "record_next_motion.py")
+real = importlib.util.module_from_spec(spec2)
+spec2.loader.exec_module(real)
+work = Path(tempfile.mkdtemp())
+clip = work / "clip_20261007_100000.mp4"
+
+calls = []
+
+
+def fake_ffmpeg(cmd, **_kw):
+    calls.append(cmd)
+    Path(cmd[-1]).write_bytes(b"fixed" if cmd[-2] == "mp4" else b"ts")
+
+
+clip.write_bytes(b"original")
+real.subprocess.run = fake_ffmpeg
+real.fix_clip(clip)
+check("fix_clip : le clip est remplacé par la version reconstruite", clip.read_bytes() == b"fixed")
+check("fix_clip : passage par un flux intermédiaire, sans ré-encodage, index au début",
+      any("h264_mp4toannexb" in c for c in calls) and all("copy" in c for c in calls)
+      and any("+faststart" in c for c in calls))
+check("fix_clip : aucun fichier temporaire ne reste", sorted(p.name for p in work.iterdir()) == [clip.name])
+
+
+def failing_ffmpeg(cmd, **_kw):
+    Path(cmd[-1]).write_bytes(b"partial")
+    raise real.subprocess.CalledProcessError(1, cmd)
+
+
+clip.write_bytes(b"original")
+real.subprocess.run = failing_ffmpeg
+real.fix_clip(clip)
+check("fix_clip : ffmpeg échoue, le clip d'origine est gardé", clip.read_bytes() == b"original")
+check("fix_clip : échec, aucun fichier temporaire ne reste", sorted(p.name for p in work.iterdir()) == [clip.name])
+
+import shutil
+if shutil.which("ffmpeg"):
+    real.subprocess.run = REAL_RUN
+    REAL_RUN(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25:duration=2",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(clip)], check=True)
+    before = REAL_RUN(["ffprobe", "-v", "error", "-count_frames", "-show_entries", "stream=nb_read_frames",
+                     "-of", "csv=p=0", str(clip)], capture_output=True, text=True).stdout.strip()
+    real.fix_clip(clip)
+    after = REAL_RUN(["ffprobe", "-v", "error", "-count_frames", "-show_entries", "stream=nb_read_frames",
+                    "-of", "csv=p=0", str(clip)], capture_output=True, text=True).stdout.strip()
+    check("fix_clip avec le vrai ffmpeg : même nombre d'images, fichier lisible", before == after != "")
+else:
+    print("saut  : ffmpeg absent, test réel de fix_clip ignoré")
 
 # L'arrêt du clip relance birdcam : il doit être demandé avant celui de birdcam.
 for name in ("scripts/stop_services.sh", "RESTORE.md"):

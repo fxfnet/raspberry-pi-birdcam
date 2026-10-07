@@ -14,6 +14,7 @@ Lancé par le bouton de la galerie admin, via birdcam-clip.service :
     sudo systemctl start --no-block birdcam-clip
 Annulation : sudo systemctl stop birdcam-clip (la capture photo repart).
 """
+import os
 import signal
 import subprocess
 import sys
@@ -55,6 +56,32 @@ def systemctl(action):
     subprocess.run(["sudo", "systemctl", action, *flags, "birdcam"], check=False)
 
 
+def fix_clip(path):
+    """Reconstruit le MP4 d'après le flux réel de l'encodeur, pour l'iPhone.
+
+    PyAV écrit dans le conteneur un SPS par défaut (niveau 3.2, 4 images de
+    référence) qui contredit celui du flux (niveau 4.0, 1 image de référence) :
+    ordinateurs et Android le tolèrent, iOS lit sans afficher d'image. Passer
+    par un flux intermédiaire force ffmpeg à relire le SPS réel, sans
+    ré-encodage ; faststart place l'index au début. En cas d'échec, le clip
+    d'origine est gardé tel quel.
+    """
+    stream = path.with_name(path.name + ".ts.tmp")
+    fixed = path.with_name(path.name + ".fix.tmp")
+    base = ["ffmpeg", "-v", "error", "-y"]
+    try:
+        subprocess.run(base + ["-i", str(path), "-c", "copy", "-bsf:v", "h264_mp4toannexb",
+                               "-f", "mpegts", str(stream)], check=True, timeout=30)
+        subprocess.run(base + ["-f", "mpegts", "-i", str(stream), "-c", "copy",
+                               "-movflags", "+faststart", "-f", "mp4", str(fixed)], check=True, timeout=30)
+        os.replace(fixed, path)
+    except Exception as error:
+        log(f"Clip non corrigé pour iOS, gardé tel quel : {error}")
+    finally:
+        stream.unlink(missing_ok=True)
+        fixed.unlink(missing_ok=True)
+
+
 def stop_on_signal(signum, _frame):
     # Fait passer par le finally, donc par la relance de la capture photo.
     raise SystemExit(f"signal {signum}")
@@ -73,6 +100,7 @@ def main():
 
     picam2 = None
     circular = None
+    clip_path = None
     try:
         log("Arrêt de la capture photo")
         systemctl("stop")
@@ -97,6 +125,7 @@ def main():
             if score > MOTION_THRESHOLD:
                 path = CLIPS_DIR / f"clip_{datetime.now():%Y%m%d_%H%M%S}.mp4"
                 log(f"Mouvement (score {score}), enregistrement de {CLIP_SECONDS} s : {path}")
+                clip_path = path
                 circular.open_output(PyavOutput(str(path)))
                 time.sleep(CLIP_SECONDS)
                 circular.close_output()
@@ -120,6 +149,8 @@ def main():
                 step()
             except Exception as error:
                 log(f"Arrêt de la caméra : {error}")
+        if clip_path is not None and clip_path.exists():
+            fix_clip(clip_path)
         log("Relance de la capture photo")
         systemctl("start")
 
