@@ -33,6 +33,8 @@ CLIP_SECONDS = 10
 PRE_ROLL_MS = 2000
 MAX_WAIT_SECONDS = 3600
 WARMUP_SECONDS = 3
+# Deux passes ffmpeg d'environ 1 s ; 2 x 10 s restent sous TimeoutStopSec=30 de l'unité.
+FIX_TIMEOUT_SECONDS = 10
 
 VIDEO_SIZE = (1280, 960)
 FRAME_RATE = 25
@@ -68,12 +70,12 @@ def fix_clip(path):
     """
     stream = path.with_name(path.name + ".ts.tmp")
     fixed = path.with_name(path.name + ".fix.tmp")
-    base = ["ffmpeg", "-v", "error", "-y"]
+    base = ["ffmpeg", "-nostdin", "-v", "error", "-y"]
     try:
         subprocess.run(base + ["-i", str(path), "-c", "copy", "-bsf:v", "h264_mp4toannexb",
-                               "-f", "mpegts", str(stream)], check=True, timeout=30)
+                               "-f", "mpegts", str(stream)], check=True, timeout=FIX_TIMEOUT_SECONDS)
         subprocess.run(base + ["-f", "mpegts", "-i", str(stream), "-c", "copy",
-                               "-movflags", "+faststart", "-f", "mp4", str(fixed)], check=True, timeout=30)
+                               "-movflags", "+faststart", "-f", "mp4", str(fixed)], check=True, timeout=FIX_TIMEOUT_SECONDS)
         os.replace(fixed, path)
     except Exception as error:
         log(f"Clip non corrigé pour iOS, gardé tel quel : {error}")
@@ -97,6 +99,9 @@ def main():
     signal.signal(signal.SIGTERM, stop_on_signal)
     signal.signal(signal.SIGHUP, stop_on_signal)
     CLIPS_DIR.mkdir(exist_ok=True)
+    # Restes d'un clip tué pendant sa correction (SIGKILL) : invisibles, mais jamais purgés sinon.
+    for leftover in CLIPS_DIR.glob("clip_*.mp4.*.tmp"):
+        leftover.unlink(missing_ok=True)
 
     picam2 = None
     circular = None

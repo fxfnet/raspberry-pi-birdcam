@@ -169,7 +169,22 @@ check("l'unité entre en conflit avec birdcam (un restart de birdcam annule le c
       re.search(r"^Conflicts=.*birdcam\.service", unit, re.M) is not None)
 limit = re.search(r"^RuntimeMaxSec=(\d+)", unit, re.M)
 check("l'unité borne la durée au-delà de l'attente maximale du script",
-      limit is not None and int(limit.group(1)) >= 90 + record.MAX_WAIT_SECONDS + record.WARMUP_SECONDS + record.CLIP_SECONDS + 60)
+      limit is not None and int(limit.group(1)) >= 90 + record.MAX_WAIT_SECONDS + record.WARMUP_SECONDS + record.CLIP_SECONDS + 2 * record.FIX_TIMEOUT_SECONDS + 60)
+
+# Ordre imposé : caméra fermée, puis correction du clip, puis relance de birdcam.
+# Relancer d'abord ferait arrêter l'unité par Conflicts= et tuerait ffmpeg à chaque clip.
+order = []
+record.CircularOutput2 = FakeCircular
+record.Picamera2 = lambda: StartableCamera(order)
+record.fix_clip = lambda _path: order.append("fix_clip")
+record.subprocess.run = lambda cmd, **_k: order.append("systemctl " + cmd[2])
+record.time = types.SimpleNamespace(sleep=sleep, monotonic=__import__("time").monotonic)
+try:
+    record.main()
+except SystemExit:
+    pass
+check("ordre : close de la caméra, puis fix_clip, puis start de birdcam",
+      order[-3:] == ["close", "fix_clip", "systemctl start"])
 
 # fix_clip : conteneur reconstruit d'après le flux réel (iOS), clip d'origine gardé en cas d'échec.
 spec2 = importlib.util.spec_from_file_location("record_real", ROOT / "scripts" / "record_next_motion.py")
@@ -220,6 +235,23 @@ if shutil.which("ffmpeg"):
     check("fix_clip avec le vrai ffmpeg : même nombre d'images, fichier lisible", before == after != "")
 else:
     print("saut  : ffmpeg absent, test réel de fix_clip ignoré")
+real.subprocess.run = REAL_RUN
+
+stop_limit = re.search(r"^TimeoutStopSec=(\d+)", unit, re.M)
+check("deux passes ffmpeg au pire restent sous TimeoutStopSec (le finally finit avant SIGKILL)",
+      stop_limit is not None and 2 * record.FIX_TIMEOUT_SECONDS < int(stop_limit.group(1)))
+clips_dir = Path(os.environ["HOME"]) / "clips"
+clips_dir.mkdir(exist_ok=True)
+for name in ("clip_20261007_100000.mp4.ts.tmp", "clip_20261007_100000.mp4.fix.tmp"):
+    (clips_dir / name).write_bytes(b"x")
+(clips_dir / "clip_20261007_100000.mp4").write_bytes(b"keep")
+run()
+check("au démarrage, les restes de correction sont supprimés, les clips gardés",
+      not list(clips_dir.glob("*.tmp")) and (clips_dir / "clip_20261007_100000.mp4").read_bytes() == b"keep")
+
+# 6 : ffmpeg est installé par setup_system.sh
+check("setup_system.sh installe ffmpeg",
+      re.search(r"apt-get install .*\bffmpeg\b", (ROOT / "scripts" / "setup_system.sh").read_text()) is not None)
 
 # L'arrêt du clip relance birdcam : il doit être demandé avant celui de birdcam.
 for name in ("scripts/stop_services.sh", "RESTORE.md"):

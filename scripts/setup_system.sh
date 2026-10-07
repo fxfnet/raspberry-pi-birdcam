@@ -29,7 +29,7 @@ step() { echo; echo "=== $* ==="; }
 
 step "1. Paquets"
 sudo apt-get update
-sudo apt-get install -y python3-picamera2 python3-opencv python3-numpy python3-flask git wget
+sudo apt-get install -y python3-picamera2 python3-opencv python3-numpy python3-flask ffmpeg git wget
 
 step "2. Clé USB des captures (${USB_LABEL} -> ${USB_MOUNT})"
 USB_DEV="$(sudo blkid -L "${USB_LABEL}" || true)"
