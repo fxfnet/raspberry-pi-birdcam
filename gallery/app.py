@@ -994,7 +994,7 @@ HTML_TEMPLATE = """
         {% if mode == 'species' and species_query %}
         <a class="filter active" href="/?filter=bird&per_page={{ per_page }}">× {{ species_query }}</a>
         {% endif %}
-        <a class="filter" href="/clips">Clips</a>
+        <a class="filter" href="/clips">Birds video</a>
         <a class="filter" href="/stats">Stats</a>
     </div>
 
@@ -1570,7 +1570,7 @@ CLIPS_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }} · Clips</title>
+    <title>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }} · Birds video</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         :root {
@@ -1624,7 +1624,7 @@ CLIPS_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h1>Clips</h1>
+    <h1>Birds video</h1>
     <a href="/">← Galerie</a>
     {% if waiting %}
     <p class="notice">Un clip est en attente du prochain mouvement. Aucune photo n'est prise pendant ce temps.</p>
