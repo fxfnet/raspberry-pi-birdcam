@@ -2,7 +2,7 @@
 
 > État partagé du projet. Toute session ou tout agent, quel que soit le modèle, le lit en premier et le met à jour en dernier (rôle de l'archiviste). La carte du projet est `AGENTS.md`. Ce dépôt n'a pas de `DECISIONS.md` : les décisions et leurs motifs sont dans les messages de commit.
 
-Dernière mise à jour : 2026-10-06 par Claude (archiviste, unité du clip installée par lien symbolique, trois essais réels faits sur le Pi)
+Dernière mise à jour : 2026-10-07 par Claude (archiviste, correctif iPhone des clips déployé, vérification sur iPhone en attente)
 
 ## Quel est l'objectif ?
 
@@ -21,7 +21,7 @@ Un agent n'est jamais responsable d'un arbitrage : il propose, FX tranche.
 
 ## Où en est-on ?
 
-Le Pi est à jour avec `main` (HEAD `895d759`, `git pull` fait le 2026-10-06). Déployé et vérifié depuis, tous fusionnés par accord explicite de FX :
+Le Pi est à jour avec `main` (HEAD `af46388`, `git pull` fait le 2026-10-07). Déployé et vérifié depuis, tous fusionnés par accord explicite de FX :
 
 - **2026-09-27** (604597b à c6fcd3d) : restauration depuis macaron (`RESTORE.md`), contrôle de `corrections.json` avant sauvegarde dans `scripts/backup_usb.sh`, copies quotidiennes. Déployé sur le Pi le matin même. `scripts/test_backup_usb.sh` passe sur le Pi (7/7). Sauvegarde vérifiée sur macaron (`corrections_2026-09-27.json` présent).
 - **2026-09-27** (51784a0 + 4e3bc4f) : watchdog interne basé sur `SensorTimestamp` (l'ancien critère « aucun pixel changé 20 min » avait causé 25 relances à tort en 5 jours, la nuit et par temps calme). Angle mort accepté : images identiques avec horodatage qui avance.
@@ -42,6 +42,17 @@ Chaque changement a été relu par l'agent adversaire avant fusion.
 - l'aperçu `og:image` peut être une photo `star_motion`.
 
 Fichier non suivi dans le repo : `training/garden_birds_captures.onnx`, doublon exact de `model/garden_birds.onnx`. Ne pas le supprimer sans accord de FX.
+
+**Clips noirs sur iPhone : correctif déployé le 2026-10-07, NON vérifié sur iPhone avec le script réel** (3a1a7c1, ce64806, 18758d0, fusion af46388, poussé, déployé).
+- Symptôme signalé par FX : les clips se lisent sur ordinateur mais restent noirs sur iPhone (le lecteur avance, aucune image), en local et via Funnel.
+- Cause établie : PyAV écrit dans l'avcC du conteneur un SPS par défaut (niveau 3.2, 4 images de référence, réordonnancement 2, 24 i/s) qui contredit le SPS réel du flux (niveau 4.0, 1 référence, aucun réordonnancement, 30 i/s). Vérifié par FX sur iPhone avec trois variantes du clip du 2026-10-06 : faststart seul, noir ; avcC reconstruit (variante b), OK ; ré-encodage, OK.
+- Correctif : `fix_clip()` dans `scripts/record_next_motion.py` remuxe chaque clip via un flux MPEG-TS avec ffmpeg (sans ré-encodage, horodatages gardés, index au début), remplacement atomique, clip d'origine gardé en cas d'échec. Appelé dans le `finally` après fermeture de la caméra et avant la relance de `birdcam` (ordre imposé : relancer d'abord ferait tuer ffmpeg par `Conflicts=`). Aussi appliqué à un clip annulé en cours d'enregistrement. `FIX_TIMEOUT_SECONDS=10` par passe ; restes `clip_*.mp4.*.tmp` purgés au démarrage ; `ffmpeg` ajouté à `scripts/setup_system.sh` (il n'était sur le Pi que via `rpd-graphics`). Relecture adverse faite : aucun chemin perdant la relance de `birdcam` ni détruisant un clip lisible. Tests étendus dans `test_record_next_motion.py`.
+- **Écart assumé** : la variante validée sur iPhone est `b` (avcC reconstruit, cadence fixe 25 i/s) ; le script produit `d` (via TS, horodatages réels), jamais vue sur iPhone avant fusion. FX a ordonné la fusion et le déploiement quand même.
+- **Vérification en attente** : le premier clip réel produit sur le Pi fait foi, à ouvrir sur iPhone (non fait). Relever aussi la durée réelle de `fix_clip` dans le journal (estimée 1 à 3 s).
+- Réparation, avec l'accord de FX : `clip_20261006_092717.mp4` refait sur le Pi avec les mêmes commandes (219 images gardées, SPS cohérents) ; original sauvegardé sur le Mac dans `~/Movies/birdcam/` (empreintes identiques avant). `clip_20261007_093507.mp4` (créé avant le correctif) reste noir sur iPhone : réparation non faite, FX n'a pas répondu.
+- **Risque accepté (décision de FX, 2026-10-07)** : une annulation pendant les 2 à 5 s de la correction laisse le clip non corrigé, noir sur iPhone, et seul le journal le dit. FX choisit de ne rien faire. Options écartées : `KillMode=mixed` dans l'unité, reprise différée des clips non corrigés. Déclencheur de révision non fixé.
+- Renommage (18758d0) : la section « Clips » de la galerie s'appelle « Birds video » (lien, titre d'onglet, titre de page). L'URL `/clips`, le dossier `clips/` et l'unité `birdcam-clip` gardent leur nom.
+- Déploiement sur le Pi : `git pull` à `af46388`, `birdcam-gallery` et `birdcam-gallery-admin` redémarrés, `birdcam` actif, quatre fichiers de tests passent sur le Pi, `/clips` répond 200, lien « Birds video » présent. `birdcam-clip.service` est un lien symbolique vers le repo, inchangé par ces commits : pas de `daemon-reload` nécessaire.
 
 **Bouton de clip vidéo : fusionné le 2026-10-06, unité installée sur le Pi, essayé en réel le soir même (trois essais, voir plus bas)** (e2b1daa, 7cac83c, 0d79263, 85c9a8e, ae690e1, puis af7e569, 0f08450, fusion 895d759). Sur ordre de FX : fusion dans `main`, poussé (HEAD `895d759`), après deux passes de relecture adverse à contexte vierge (la seconde sans défaut bloquant). Le script d'essai `scripts/record_next_motion.py` est intégré à la galerie admin :
 - bouton admin « Faire une vidéo du prochain mouvement détecté » : lance `birdcam-clip.service`, attente d'1 h au plus, clip de 10 s, retour à la capture photo ;
@@ -70,7 +81,7 @@ Vérifié : `LoadState=loaded`, `ActiveState=inactive`, `Conflicts=birdcam.servi
 
 **Non fait** : le premier envoi d'un clip vers macaron au prochain passage horaire de sauvegarde n'a pas été observé.
 
-Décisions de FX (2026-10-06) : clips publics ; sauvegarde des clips vers macaron ; bouton réservé à l'admin ; attente d'1 h ; section séparée « Clips ». La copie de l'essai du 2026-10-05 était dans `/tmp/record_next_motion.py` sur le Pi, hors repo : elle ne gêne pas `git pull`.
+Décisions de FX (2026-10-06) : clips publics ; sauvegarde des clips vers macaron ; bouton réservé à l'admin ; attente d'1 h ; section séparée « Clips » (renommée « Birds video » le 2026-10-07). La copie de l'essai du 2026-10-05 était dans `/tmp/record_next_motion.py` sur le Pi, hors repo : elle ne gêne pas `git pull`.
 
 **Points ouverts sur le clip**, non tranchés, à soumettre à FX :
 - redémarrage de `birdcam` pendant l'attente d'un clip : **résolu et vérifié sur le Pi** (essai 2 du 2026-10-06). FX a retenu `Conflicts=birdcam.service` avec `After=` dans `birdcam-clip.service` : le restart annule le clip (af7e569). Trois verrous de test ajoutés (0f08450 : `After=`, `--no-block` de l'`ExecStopPost` et du start dans le script). Reste le kill de toute l'unité clip, voir le risque résiduel ci-dessus ;
@@ -81,6 +92,7 @@ Décisions de FX (2026-10-06) : clips publics ; sauvegarde des clips vers macaro
 - aucune protection CSRF sur les POST admin (défaut antérieur au clip) ;
 - pas de purge des clips (clé USB, et macaron car sans `--delete`) ;
 - fusion des jobs systemd stop/start de `birdcam` à vérifier sur le Pi hors clip ;
+- iPhone : voir le correctif du 2026-10-07 plus haut (vérification, clip du 07/10 non réparé, risque d'annulation accepté) ;
 - les clips d'essai du 2026-10-06 (09:27 et 20:03) n'ont pas été jugés : on ignore ce que contiennent les images (le second déclenché par FX devant la caméra).
 
 ## Qu'a appris le terrain ?
@@ -102,9 +114,11 @@ Un pari est un investissement de temps, d'effort ou d'argent sur une évaluation
 
 ## Quelle est la prochaine action ?
 
-1. **FX : choisir la suite parmi les options ci-dessous.** Les trois essais réels du clip sont faits.
+1. **FX : ouvrir sur iPhone le premier clip réel produit par le script déployé** (variante `d`, jamais vue sur iPhone), et relever la durée de `fix_clip` dans `journalctl -u birdcam-clip`.
+2. FX choisit ensuite la suite parmi les options ci-dessous. Les trois essais réels du clip sont faits.
 
 Options à soumettre à FX, non tranchées :
+- réparer ou non `clip_20261007_093507.mp4` (noir sur iPhone) ;
 - durée des clips (piste `iperiod`, 8,2 à 8,9 s pour 12 s) ;
 - pose courte absente du clip ;
 - charge thermique de l'encodage pendant l'attente, non mesurée ;
