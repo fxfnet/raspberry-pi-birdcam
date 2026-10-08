@@ -127,6 +127,15 @@ check("favicon sans script", b"<script" not in icon.data.lower())
 pages = {"/": client.get("/"), "/clips": client.get("/clips"), "/stats": client.get("/stats")}
 for url, response in pages.items():
     check(f"favicon déclaré dans {url}", 'rel="icon" type="image/svg+xml" href="/static/mesange.svg"' in response.get_data(as_text=True))
+    check(f"repli PNG et icône iPhone déclarés dans {url}",
+          'href="/static/favicon-32.png"' in response.get_data(as_text=True)
+          and 'rel="apple-touch-icon" href="/static/apple-touch-icon.png"' in response.get_data(as_text=True))
+for name, size in (("favicon-32.png", 32), ("apple-touch-icon.png", 180)):
+    png = client.get("/static/" + name)
+    check(f"{name} servi en PNG {size}x{size}",
+          png.status_code == 200 and png.mimetype == "image/png"
+          and png.data[:8] == b"\x89PNG\r\n\x1a\n"
+          and int.from_bytes(png.data[16:20], "big") == size and int.from_bytes(png.data[20:24], "big") == size)
 
 # Suppression.
 check("suppression d'un nom étranger : 404", client.post("/clip/delete/autre.mp4").status_code == 404)

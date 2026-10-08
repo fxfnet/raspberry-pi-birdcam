@@ -115,6 +115,8 @@ HTML_TEMPLATE = """
     <title>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam · Paris bird feeder" }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/svg+xml" href="/static/mesange.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 
     {% if not admin_mode %}
     {% set og_title = "Mangeoire Cam · Paris bird feeder" %}
@@ -1344,6 +1346,8 @@ VIEW_TEMPLATE = """
     <title>{{ image.species_french or image.species or image.kind_label }} · {{ image.date }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/svg+xml" href="/static/mesange.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     {# Le Pi sert lentement les photos en pleine taille : on charge la suivante d'avance. #}
     {% if next_name %}<link rel="prefetch" href="/image/{{ next_name }}">{% endif %}
     <style>
@@ -1575,6 +1579,8 @@ CLIPS_TEMPLATE = """
     <title>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }} · Birds video</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/svg+xml" href="/static/mesange.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <style>
         :root {
             --bg: #0d1110;
@@ -1663,6 +1669,8 @@ STATS_TEMPLATE = """
     <title>Birdcam Stats</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/svg+xml" href="/static/mesange.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 
     <style>
         :root {
