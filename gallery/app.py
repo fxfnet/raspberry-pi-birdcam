@@ -14,7 +14,7 @@ import threading
 import time
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=str(Path(__file__).resolve().parent / "static"))
 # Tailscale Funnel sert le site en https et relaie en http vers Flask :
 # X-Forwarded-Proto rétablit https dans les URL absolues (og:url, og:image).
 # x_for=0 : un client du réseau local ne peut pas falsifier son adresse dans les journaux.
@@ -114,6 +114,7 @@ HTML_TEMPLATE = """
     <meta charset="utf-8">
     <title>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam · Paris bird feeder" }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/static/mesange.svg">
 
     {% if not admin_mode %}
     {% set og_title = "Mangeoire Cam · Paris bird feeder" %}
@@ -1342,6 +1343,7 @@ VIEW_TEMPLATE = """
     <meta charset="utf-8">
     <title>{{ image.species_french or image.species or image.kind_label }} · {{ image.date }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/static/mesange.svg">
     {# Le Pi sert lentement les photos en pleine taille : on charge la suivante d'avance. #}
     {% if next_name %}<link rel="prefetch" href="/image/{{ next_name }}">{% endif %}
     <style>
@@ -1572,6 +1574,7 @@ CLIPS_TEMPLATE = """
     <meta charset="utf-8">
     <title>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }} · Birds video</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/static/mesange.svg">
     <style>
         :root {
             --bg: #0d1110;
@@ -1659,6 +1662,7 @@ STATS_TEMPLATE = """
     <meta charset="utf-8">
     <title>Birdcam Stats</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/static/mesange.svg">
 
     <style>
         :root {

@@ -120,6 +120,14 @@ check("annulation trop lente : pas d'erreur 500", client.post("/clip/cancel").st
 check("lancement trop lent : 504", client.post("/clip/request").status_code == 504)
 app.subprocess.run = fake_run
 
+# Favicon : la mésange, servie par /static, déclarée dans chaque page.
+icon = client.get("/static/mesange.svg")
+check("favicon servi en image/svg+xml", icon.status_code == 200 and icon.mimetype == "image/svg+xml")
+check("favicon sans script", b"<script" not in icon.data.lower())
+pages = {"/": client.get("/"), "/clips": client.get("/clips"), "/stats": client.get("/stats")}
+for url, response in pages.items():
+    check(f"favicon déclaré dans {url}", 'rel="icon" type="image/svg+xml" href="/static/mesange.svg"' in response.get_data(as_text=True))
+
 # Suppression.
 check("suppression d'un nom étranger : 404", client.post("/clip/delete/autre.mp4").status_code == 404)
 client.post(f"/clip/delete/{NAME}")
