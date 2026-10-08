@@ -84,6 +84,10 @@ client = app.app.test_client()
 check("date impossible : / répond 200", client.get("/?filter=all").status_code == 200)
 check("date impossible : /view répond 200", client.get(f"/view/{bad}?filter=all").status_code == 200)
 
+# Mode public (celui qu'expose Funnel) : les icônes sont servies et déclarées.
+check("public : /static/mesange.svg répond 200", client.get("/static/mesange.svg").status_code == 200)
+check("public : icône déclarée dans /", 'href="/static/mesange.svg"' in client.get("/?filter=all").get_data(as_text=True))
+
 # X-Forwarded-Proto pris en compte, X-Forwarded-For ignoré.
 page = client.get("/", headers={"X-Forwarded-Proto": "https"}).get_data(as_text=True)
 check("og:url en https derrière le proxy", 'content="https://localhost/"' in page)

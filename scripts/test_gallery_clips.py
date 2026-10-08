@@ -123,8 +123,19 @@ app.subprocess.run = fake_run
 # Favicon : la mésange, servie par /static, déclarée dans chaque page.
 icon = client.get("/static/mesange.svg")
 check("favicon servi en image/svg+xml", icon.status_code == 200 and icon.mimetype == "image/svg+xml")
-check("favicon sans script", b"<script" not in icon.data.lower())
-pages = {"/": client.get("/"), "/clips": client.get("/clips"), "/stats": client.get("/stats")}
+# Le SVG est servi en image/svg+xml sur l'origine publique : liste blanche d'éléments, rien d'actif.
+import xml.etree.ElementTree as ET
+svg = ET.fromstring(icon.data)
+tags = {e.tag.split("}")[-1] for e in svg.iter()}
+attributes = [a.lower() for e in svg.iter() for a in e.attrib]
+check("favicon : seuls svg, path et circle (élargir sciemment)", tags <= {"svg", "path", "circle"})
+check("favicon : aucun attribut on* ni href", not any(a.startswith("on") and a != "data-d-component" or "href" in a for a in attributes))
+check("favicon : ni DOCTYPE, ENTITY, url() ni script",
+      not any(token in icon.data.lower() for token in (b"<!doctype", b"<!entity", b"url(", b"<script")))
+capture = "bird_20261001_100000_000_burst0_motion1500_conf0.90_bestbird.jpg"
+(HOME / "birdcam" / "captures" / capture).write_bytes(b"jpg")
+pages = {"/": client.get("/"), "/clips": client.get("/clips"), "/stats": client.get("/stats"),
+         f"/view/{capture}": client.get(f"/view/{capture}?filter=all")}
 for url, response in pages.items():
     check(f"favicon déclaré dans {url}", 'rel="icon" type="image/svg+xml" href="/static/mesange.svg"' in response.get_data(as_text=True))
     check(f"repli PNG et icône iPhone déclarés dans {url}",
@@ -136,6 +147,23 @@ for name, size in (("favicon-32.png", 32), ("apple-touch-icon.png", 180)):
           png.status_code == 200 and png.mimetype == "image/png"
           and png.data[:8] == b"\x89PNG\r\n\x1a\n"
           and int.from_bytes(png.data[16:20], "big") == size and int.from_bytes(png.data[20:24], "big") == size)
+
+# /static ne doit servir que les trois icônes, jamais gallery/thumbs ni un lien symbolique.
+static_dir = Path(app.__file__).resolve().parent / "static"
+check("gallery/static ne contient que les trois icônes",
+      sorted(p.name for p in static_dir.iterdir()) == ["apple-touch-icon.png", "favicon-32.png", "mesange.svg"])
+check("gallery/static sans lien symbolique", not any(p.is_symlink() for p in static_dir.iterdir()))
+thumbs = static_dir.parent / "thumbs"
+leaked = not thumbs.exists()
+thumbs.mkdir(exist_ok=True)
+(thumbs / "probe.jpg").write_bytes(b"jpg")
+try:
+    check("gallery/thumbs n'est pas servi par /static",
+          all(client.get(url).status_code == 404 for url in ("/static/thumbs/probe.jpg", "/static/../thumbs/probe.jpg")))
+finally:
+    (thumbs / "probe.jpg").unlink()
+    if leaked:
+        thumbs.rmdir()
 
 # Suppression.
 check("suppression d'un nom étranger : 404", client.post("/clip/delete/autre.mp4").status_code == 404)
