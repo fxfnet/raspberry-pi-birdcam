@@ -1021,13 +1021,6 @@ HTML_TEMPLATE = """
                 align-items: stretch;
             }
 
-            .public-info-species {
-                overflow-x: auto;
-                flex-wrap: nowrap;
-                white-space: nowrap;
-                padding-bottom: 0.15rem;
-            }
-
             .pagination {
                 overflow-x: auto;
                 flex-wrap: nowrap;
