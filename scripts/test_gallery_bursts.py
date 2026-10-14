@@ -106,6 +106,10 @@ check("accueil : certitude affichée", "Certainty 88 %" in home)
 admin_free = client.get("/?filter=all").get_data(as_text=True)
 check("accueil : plus d'ancien décompte « affichées »", "affichées" not in admin_free)
 check("en-tête : plus de « page x/y » dans la bande d'état", not re.search(r"page \d+/\d+", home.split("</header>")[0]))
+mobile_css = app.HTML_TEMPLATE.split("@media (max-width: 700px)")[1]
+nav_rule = re.search(r"\.nav-row \{([^}]*)\}", mobile_css)
+check("mobile : .nav-row en colonne sans retour à la ligne (sinon la page déborde avec un filtre d'espèce)",
+      nav_rule is not None and "flex-wrap: nowrap" in nav_rule.group(1))
 check("en-tête : libellé « Most seen » devant les pastilles", 'class="species-label">Most seen<' in home)
 check("en-tête : Birds video et Stats à part des filtres",
       re.search(r'<div class="nav-links">\s*<a href="/clips">Birds video</a>\s*<a href="/stats">Stats</a>', home) is not None

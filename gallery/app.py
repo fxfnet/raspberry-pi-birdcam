@@ -1017,6 +1017,7 @@ HTML_TEMPLATE = """
 
             .nav-row {
                 flex-direction: column;
+                flex-wrap: nowrap;
                 align-items: stretch;
             }
 
