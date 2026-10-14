@@ -210,7 +210,7 @@ HTML_TEMPLATE = """
             display: none;
         }
 
-        header.compact .filters {
+        header.compact .nav-row {
             margin-top: 0.45rem;
         }
 
@@ -253,8 +253,8 @@ HTML_TEMPLATE = """
         .stat-tile {
             display: flex;
             flex-direction: column;
-            min-width: 5.2rem;
-            padding: 0.45rem 0.8rem;
+            min-width: 4.4rem;
+            padding: 0.35rem 0.7rem;
             background: var(--panel2);
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -277,14 +277,41 @@ HTML_TEMPLATE = """
             color: var(--muted);
         }
 
+        .status-strip {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.6rem 1.4rem;
+        }
+
         .last-visit {
-            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            line-height: 1.2;
+        }
+
+        .last-visit-label {
+            font-size: 0.74rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
             color: var(--muted);
         }
 
         .last-visit strong {
+            font-size: 1.45rem;
+            font-weight: 800;
             color: var(--text);
-            font-weight: 600;
+        }
+
+        .last-visit-date {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .species-label {
+            font-size: 0.74rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }
 
         .subtitle {
@@ -350,6 +377,35 @@ HTML_TEMPLATE = """
 
         .hero-intro a:hover {
             text-decoration: underline;
+        }
+
+        .nav-row {
+            margin-top: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem 1rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-row .filters {
+            margin-top: 0;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .nav-links a {
+            color: var(--bird);
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+        }
+
+        .nav-links a:hover {
+            border-bottom-color: var(--bird);
         }
 
         .filters,
@@ -959,6 +1015,18 @@ HTML_TEMPLATE = """
                 padding-bottom: 0.15rem;
             }
 
+            .nav-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .public-info-species {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                white-space: nowrap;
+                padding-bottom: 0.15rem;
+            }
+
             .pagination {
                 overflow-x: auto;
                 flex-wrap: nowrap;
@@ -1100,18 +1168,31 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
+    <div class="hero-intro">
+        A Raspberry Pi watches a Paris bird feeder and names its visitors with a model trained on garden birds, still learning.
+        <a href="https://toysfab.com/2026/05/une-camera-automatique-pour-mangeoire-a-oiseaux-avec-un-raspberry-pi/"
+           target="_blank" rel="noopener noreferrer">Read the Toysfab build story</a>.
+    </div>
+
     {% if not admin_mode %}
     <div class="public-info">
-        <div class="stat-tiles">
-            <div class="stat-tile"><span class="stat-num">{{ status.bird_count }}</span><span class="stat-label">birds</span></div>
-            <div class="stat-tile star"><span class="stat-num">{{ status.star_count }}</span><span class="stat-label">stars</span></div>
-            <div class="stat-tile today"><span class="stat-num">{{ status.today_count }}</span><span class="stat-label">today</span></div>
-        </div>
-        <div class="last-visit">
-            {% if status.last_bird_ago %}Last visit <strong>{{ status.last_bird_ago }}</strong> · {{ status.last_bird_date }} · {% endif %}page {{ page }}/{{ total_pages }}
+        <div class="status-strip">
+            {% if status.last_bird_ago %}
+            <div class="last-visit">
+                <span class="last-visit-label">Last visit</span>
+                <strong>{{ status.last_bird_ago }}</strong>
+                <span class="last-visit-date">{{ status.last_bird_date }}</span>
+            </div>
+            {% endif %}
+            <div class="stat-tiles">
+                <div class="stat-tile"><span class="stat-num">{{ status.bird_count }}</span><span class="stat-label">birds</span></div>
+                <div class="stat-tile star"><span class="stat-num">{{ status.star_count }}</span><span class="stat-label">stars</span></div>
+                <div class="stat-tile today"><span class="stat-num">{{ status.today_count }}</span><span class="stat-label">today</span></div>
+            </div>
         </div>
         {% if status.top_species %}
         <div class="public-info-species">
+            <span class="species-label">Most seen</span>
             {% for sp in status.top_species %}
             <a href="/?filter=species&species={{ sp.name }}">{% if sp.french %}{{ sp.french }}{% else %}{{ sp.name }}{% endif %}<span class="sp-count">{{ sp.sure }}{% if sp.probable %}<span class="sp-probable" title="probables (confiance 0.3 à 0.6)"> +{{ sp.probable }} ?</span>{% endif %}</span></a>
             {% endfor %}
@@ -1120,23 +1201,21 @@ HTML_TEMPLATE = """
     </div>
     {% endif %}
 
-    <div class="hero-intro">
-        A Raspberry Pi watches a Paris bird feeder and names its visitors with a model trained on garden birds, still learning.
-        <a href="https://toysfab.com/2026/05/une-camera-automatique-pour-mangeoire-a-oiseaux-avec-un-raspberry-pi/"
-           target="_blank" rel="noopener noreferrer">Read the Toysfab build story</a>.
-    </div>
-
-    <div class="filters">
-        <a class="filter {{ 'active' if mode == 'bird' else '' }}" href="/?filter=bird&per_page={{ per_page }}">Birds</a>
-        <a class="filter {{ 'active' if mode == 'star' else '' }}" href="/?filter=star&per_page={{ per_page }}">Stars</a>
-        <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
-        <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Motion only</a>
-        {% if mode == 'species' and species_query %}
-        <a class="filter active" href="/?filter=bird&per_page={{ per_page }}">× {{ species_query }}</a>
-        {% endif %}
-        <a class="filter" href="/clips">Birds video</a>
-        <a class="filter" href="/stats">Stats</a>
-    </div>
+    <nav class="nav-row">
+        <div class="filters">
+            <a class="filter {{ 'active' if mode == 'bird' else '' }}" href="/?filter=bird&per_page={{ per_page }}">Birds</a>
+            <a class="filter {{ 'active' if mode == 'star' else '' }}" href="/?filter=star&per_page={{ per_page }}">Stars</a>
+            <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
+            <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Motion only</a>
+            {% if mode == 'species' and species_query %}
+            <a class="filter active" href="/?filter=bird&per_page={{ per_page }}">× {{ species_query }}</a>
+            {% endif %}
+        </div>
+        <div class="nav-links">
+            <a href="/clips">Birds video</a>
+            <a href="/stats">Stats</a>
+        </div>
+    </nav>
 
     {% if admin_mode %}
     <button class="status-toggle" onclick="document.body.classList.toggle('show-status')">

@@ -98,13 +98,18 @@ os.utime(CAPTURES / star, (recent, recent))
 home = client.get("/").get_data(as_text=True)
 check("accueil : logo dans l'en-tête", 'class="brand-logo" src="/static/mesange.svg"' in home)
 check("accueil : tuiles de chiffres", len(re.findall(r'<div class="stat-tile( star| today)?">', home)) == 3)
-check("accueil : dernière visite relative", "Last visit <strong>12 min ago</strong>" in home)
+check("accueil : dernière visite relative", "<strong>12 min ago</strong>" in home and "Last visit</span>" in home)
 check("accueil : vignette « Latest star » en pleine résolution (/image), pas en miniature",
       re.search(r'<div class="latest-star-photo">\s*<img src="/image/' + re.escape(star), home) is not None)
 check("accueil : espèce en titre de la vignette", '<div class="latest-star-title">Mésange charbonnière</div>' in home)
 check("accueil : certitude affichée", "Certainty 88 %" in home)
 admin_free = client.get("/?filter=all").get_data(as_text=True)
 check("accueil : plus d'ancien décompte « affichées »", "affichées" not in admin_free)
+check("en-tête : plus de « page x/y » dans la bande d'état", not re.search(r"page \d+/\d+", home.split("</header>")[0]))
+check("en-tête : libellé « Most seen » devant les pastilles", 'class="species-label">Most seen<' in home)
+check("en-tête : Birds video et Stats à part des filtres",
+      re.search(r'<div class="nav-links">\s*<a href="/clips">Birds video</a>\s*<a href="/stats">Stats</a>', home) is not None
+      and '<a class="filter" href="/clips">' not in home)
 
 # Mise en page : le texte de la vignette garde un minimum (sinon le titre est coupé à 700-880 px),
 # l'en-tête compact masque toujours les nouveaux blocs.
