@@ -100,11 +100,48 @@ check("accueil : logo dans l'en-tête", 'class="brand-logo" src="/static/mesange
 check("accueil : tuiles de chiffres", len(re.findall(r'<div class="stat-tile( star| today)?">', home)) == 3)
 check("accueil : dernière visite relative", "Last visit <strong>12 min ago</strong>" in home)
 check("accueil : vignette « Latest star » en pleine résolution (/image), pas en miniature",
-      f'<div class="latest-star-photo">\n                <img src="/image/{star}"' in home)
+      re.search(r'<div class="latest-star-photo">\s*<img src="/image/' + re.escape(star), home) is not None)
 check("accueil : espèce en titre de la vignette", '<div class="latest-star-title">Mésange charbonnière</div>' in home)
 check("accueil : certitude affichée", "Certainty 88 %" in home)
 admin_free = client.get("/?filter=all").get_data(as_text=True)
 check("accueil : plus d'ancien décompte « affichées »", "affichées" not in admin_free)
+
+# Mise en page : le texte de la vignette garde un minimum (sinon le titre est coupé à 700-880 px),
+# l'en-tête compact masque toujours les nouveaux blocs.
+check("vignette : la colonne texte garde un minimum de 260 px", "minmax(260px, 1fr)" in app.HTML_TEMPLATE)
+check("en-tête compact : .public-info masqué (tuiles, visite, pastilles)",
+      "header.compact .public-info" in app.HTML_TEMPLATE)
+
+# « Last visit » : l'heure affichée est celle du dernier oiseau, pas celle d'un motion_ plus récent.
+reset()
+bird = "bird_20261001_050000_000_burst0_motion1500_conf0.90_bestbird.jpg"
+motion = "motion_20261001_100000_000_burst0_motion1500_conf0.10_bestnone.jpg"
+(CAPTURES / bird).write_bytes(b"jpg")
+(CAPTURES / motion).write_bytes(b"jpg")
+five_hours, one_minute = time.time() - 5 * 3600, time.time() - 60
+os.utime(CAPTURES / bird, (five_hours, five_hours))
+os.utime(CAPTURES / motion, (one_minute, one_minute))
+page = client.get("/").get_data(as_text=True)
+last_visit = re.search(r'<div class="last-visit">(.*?)</div>', page, re.S).group(1)
+check("dernière visite : 5 h, avec l'heure de l'oiseau",
+      "5 h ago" in last_visit and time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(five_hours)) in last_visit)
+check("dernière visite : l'heure du motion_ n'est pas affichée",
+      time.strftime("%H:%M:%S", time.localtime(one_minute)) not in last_visit)
+
+# Cas limites de la vignette et de l'en-tête.
+check("aucune étoile : pas de vignette", 'class="latest-star"' not in page)
+reset()
+check("aucun oiseau : pas de « Last visit »", "Last visit" not in client.get("/").get_data(as_text=True))
+plain = "star_motion_20261001_100000_000_burst0_motion1500_conf0.30_bestperson.jpg"
+(CAPTURES / plain).write_bytes(b"jpg")
+page = client.get("/?filter=all").get_data(as_text=True)
+check("étoile sans espèce : titre générique, pas de certitude",
+      '<div class="latest-star-title">A favourite visitor</div>' in page and "Certainty" not in page)
+reset()
+unknown = "star_bird_20261001_100000_000_burst0_motion1500_conf0.90_bestbird_spzzz_unknown_spconf0.80.jpg"
+(CAPTURES / unknown).write_bytes(b"jpg")
+check("espèce sans nom français : retombe sur le nom du fichier",
+      '<div class="latest-star-title">Zzz Unknown</div>' in client.get("/").get_data(as_text=True))
 
 for seconds, label in ((5, "just now"), (59, "just now"), (60, "1 min ago"), (3599, "59 min ago"), (3600, "1 h ago"),
                        (86399, "23 h ago"), (86400, "yesterday"), (3 * 86400, "3 days ago"), (-30, "just now")):

@@ -156,6 +156,11 @@ HTML_TEMPLATE = """
             --toysfab: #ffcf70;
         }
 
+        html {
+            /* L'en-tête rétrécit au défilement : l'ancrage du navigateur ramenait la page en haut. */
+            overflow-anchor: none;
+        }
+
         body {
             margin: 0;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -295,28 +300,12 @@ HTML_TEMPLATE = """
             gap: 0.55rem;
         }
 
-        .public-info-stats {
-            font-size: 0.88rem;
-            color: var(--text);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.2rem 0;
-            align-items: center;
-        }
-
-        .public-info-stats .sep { color: var(--muted); margin: 0 0.3rem; }
-        .public-info-stats .muted { color: var(--muted); }
-
         .public-info-species {
             font-size: 0.82rem;
             color: var(--muted);
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 0;
-        }
-
-        .public-info-species {
             gap: 0.4rem;
         }
 
@@ -474,12 +463,13 @@ HTML_TEMPLATE = """
         .latest-star-inner {
             display: grid;
             /* Photo à son format 4/3, sans bandes sombres ; le texte prend le reste. */
-            grid-template-columns: minmax(0, 580px) minmax(0, 1fr);
+            grid-template-columns: minmax(0, 580px) minmax(260px, 1fr);
             gap: 0;
         }
 
         .latest-star-photo {
             aspect-ratio: 4 / 3;
+            max-height: 70vh;
             background: #222;
         }
 
@@ -545,6 +535,7 @@ HTML_TEMPLATE = """
             font-size: 2rem;
             font-weight: 800;
             line-height: 1.15;
+            overflow-wrap: anywhere;
         }
 
         .latest-star-meta {
@@ -1117,7 +1108,7 @@ HTML_TEMPLATE = """
             <div class="stat-tile today"><span class="stat-num">{{ status.today_count }}</span><span class="stat-label">today</span></div>
         </div>
         <div class="last-visit">
-            {% if status.last_bird_ago %}Last visit <strong>{{ status.last_bird_ago }}</strong> · {% endif %}{{ status.latest_date }} · page {{ page }}/{{ total_pages }}
+            {% if status.last_bird_ago %}Last visit <strong>{{ status.last_bird_ago }}</strong> · {{ status.last_bird_date }} · {% endif %}page {{ page }}/{{ total_pages }}
         </div>
         {% if status.top_species %}
         <div class="public-info-species">
@@ -1232,7 +1223,7 @@ HTML_TEMPLATE = """
     <a href="/view/{{ latest_star.name }}?filter=star">
         <div class="latest-star-inner">
             <div class="latest-star-photo">
-                <img src="/image/{{ latest_star.name }}" alt="{{ latest_star.species_french or latest_star.species or 'Latest star' }}">
+                <img src="/image/{{ latest_star.name }}" alt="">
             </div>
             <div class="latest-star-text">
                 <div class="latest-star-kicker">Latest star</div>
@@ -2558,6 +2549,7 @@ def build_status(all_images):
         "star_count": sum(1 for image in all_images if image["starred"]),
         "today_count": sum(1 for image in all_images if image["day"] == today_key and image["kind"] == "bird"),
         "last_bird_ago": format_ago(time.time() - last_bird["mtime"]) if last_bird else None,
+        "last_bird_date": last_bird["date"] if last_bird else None,
         "latest_name": latest_name,
         "latest_date": latest_date,
         "free_gb": f"{free_gb:.1f}",

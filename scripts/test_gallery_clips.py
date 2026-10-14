@@ -165,6 +165,13 @@ finally:
     if leaked:
         thumbs.rmdir()
 
+# Admin : le logo est là, pas les tuiles publiques, le bouton Status reste.
+admin_home = client.get("/").get_data(as_text=True)
+check("admin : logo présent", 'class="brand-logo"' in admin_home)
+check("admin : ni tuiles de chiffres ni slogan public",
+      '<div class="stat-tile' not in admin_home and '<div class="brand-tag">' not in admin_home)
+check("admin : bouton Status conservé", 'class="status-toggle"' in admin_home)
+
 # Suppression.
 check("suppression d'un nom étranger : 404", client.post("/clip/delete/autre.mp4").status_code == 404)
 client.post(f"/clip/delete/{NAME}")
