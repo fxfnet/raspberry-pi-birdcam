@@ -5,6 +5,7 @@ Usage : python3 scripts/test_gallery_bursts.py   (Flask requis)
 """
 import importlib.util
 import os
+import re
 import sys
 import tempfile
 import time
@@ -87,6 +88,27 @@ check("date impossible : /view répond 200", client.get(f"/view/{bad}?filter=all
 # Mode public (celui qu'expose Funnel) : les icônes sont servies et déclarées.
 check("public : /static/mesange.svg répond 200", client.get("/static/mesange.svg").status_code == 200)
 check("public : icône déclarée dans /", 'href="/static/mesange.svg"' in client.get("/?filter=all").get_data(as_text=True))
+
+# Accueil public : logo, tuiles de chiffres, dernière visite, vignette « Latest star » nette.
+reset()
+star = "star_bird_20261001_100000_000_burst0_motion1500_conf0.90_bestbird_spparus_major_spconf0.88.jpg"
+(CAPTURES / star).write_bytes(b"jpg")
+recent = time.time() - 12 * 60
+os.utime(CAPTURES / star, (recent, recent))
+home = client.get("/").get_data(as_text=True)
+check("accueil : logo dans l'en-tête", 'class="brand-logo" src="/static/mesange.svg"' in home)
+check("accueil : tuiles de chiffres", len(re.findall(r'<div class="stat-tile( star| today)?">', home)) == 3)
+check("accueil : dernière visite relative", "Last visit <strong>12 min ago</strong>" in home)
+check("accueil : vignette « Latest star » en pleine résolution (/image), pas en miniature",
+      f'<div class="latest-star-photo">\n                <img src="/image/{star}"' in home)
+check("accueil : espèce en titre de la vignette", '<div class="latest-star-title">Mésange charbonnière</div>' in home)
+check("accueil : certitude affichée", "Certainty 88 %" in home)
+admin_free = client.get("/?filter=all").get_data(as_text=True)
+check("accueil : plus d'ancien décompte « affichées »", "affichées" not in admin_free)
+
+for seconds, label in ((5, "just now"), (59, "just now"), (60, "1 min ago"), (3599, "59 min ago"), (3600, "1 h ago"),
+                       (86399, "23 h ago"), (86400, "yesterday"), (3 * 86400, "3 days ago"), (-30, "just now")):
+    check(f"format_ago({seconds}) = {label}", app.format_ago(seconds) == label)
 
 # X-Forwarded-Proto pris en compte, X-Forwarded-For ignoré.
 page = client.get("/", headers={"X-Forwarded-Proto": "https"}).get_data(as_text=True)

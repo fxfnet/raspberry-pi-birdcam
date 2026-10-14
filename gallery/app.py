@@ -187,6 +187,15 @@ HTML_TEMPLATE = """
             font-size: 1rem;
         }
 
+        header.compact .brand-logo {
+            width: 26px;
+            height: 26px;
+        }
+
+        header.compact .brand-tag {
+            display: none;
+        }
+
         header.compact .subtitle,
         header.compact .status-panel,
         header.compact .public-summary,
@@ -211,6 +220,68 @@ HTML_TEMPLATE = """
             letter-spacing: 0.01em;
         }
 
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .brand-logo {
+            width: 48px;
+            height: 48px;
+            flex: none;
+            transition: width 0.18s ease, height 0.18s ease;
+        }
+
+        .brand-tag {
+            color: var(--muted);
+            font-size: 0.82rem;
+            margin-top: 0.1rem;
+        }
+
+        .stat-tiles {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-tile {
+            display: flex;
+            flex-direction: column;
+            min-width: 5.2rem;
+            padding: 0.45rem 0.8rem;
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .stat-num {
+            font-size: 1.45rem;
+            font-weight: 800;
+            line-height: 1.1;
+            color: var(--bird);
+        }
+
+        .stat-tile.star .stat-num { color: var(--toysfab); }
+        .stat-tile.today .stat-num { color: var(--blue); }
+
+        .stat-label {
+            font-size: 0.74rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .last-visit {
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .last-visit strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
         .subtitle {
             margin-top: 0.35rem;
             color: var(--muted);
@@ -218,10 +289,10 @@ HTML_TEMPLATE = """
         }
 
         .public-info {
-            margin-top: 0.6rem;
+            margin-top: 0.8rem;
             display: flex;
             flex-direction: column;
-            gap: 0.25rem;
+            gap: 0.55rem;
         }
 
         .public-info-stats {
@@ -245,15 +316,25 @@ HTML_TEMPLATE = """
             gap: 0;
         }
 
+        .public-info-species {
+            gap: 0.4rem;
+        }
+
         .public-info-species a {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 0.35rem;
+            padding: 0.28rem 0.7rem;
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
             color: var(--bird);
             text-decoration: none;
         }
 
-        .public-info-species a:hover { text-decoration: underline; }
-        .public-info-species .sp-count { margin: 0 0.15rem; }
-        .public-info-species .sp-probable { color: var(--muted); font-style: italic; }
-        .public-info-species .sep { color: var(--muted); }
+        .public-info-species a:hover { border-color: var(--bird); }
+        .public-info-species .sp-count { color: var(--text); font-weight: 700; }
+        .public-info-species .sp-probable { color: var(--muted); font-style: italic; font-weight: 400; }
 
         .bottom-nav {
             display: flex;
@@ -392,24 +473,63 @@ HTML_TEMPLATE = """
 
         .latest-star-inner {
             display: grid;
-            grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
+            /* Photo à son format 4/3, sans bandes sombres ; le texte prend le reste. */
+            grid-template-columns: minmax(0, 580px) minmax(0, 1fr);
             gap: 0;
+        }
+
+        .latest-star-photo {
+            aspect-ratio: 4 / 3;
+            background: #222;
         }
 
         .latest-star img {
             width: 100%;
-            height: auto;
-            max-height: 70vh;
-            object-fit: contain;
+            height: 100%;
+            object-fit: cover;
             display: block;
-            background: #222;
         }
 
         .latest-star-text {
-            padding: 1.2rem;
+            position: relative;
+            padding: 1.6rem 2rem;
             display: flex;
             flex-direction: column;
             justify-content: center;
+            overflow: hidden;
+        }
+
+        /* La mésange en filigrane remplit la partie droite de la carte. */
+        .latest-star-text::after {
+            content: "";
+            position: absolute;
+            right: -2rem;
+            bottom: -2rem;
+            width: 16rem;
+            height: 16rem;
+            background: url("/static/mesange.svg") no-repeat center / contain;
+            opacity: 0.07;
+            pointer-events: none;
+        }
+
+        .latest-star-cta {
+            align-self: flex-start;
+            margin-top: 1.1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            background: var(--toysfab);
+            color: #111;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .latest-star-certainty {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.6rem;
+            color: var(--muted);
+            font-size: 0.88rem;
         }
 
         .latest-star-kicker {
@@ -422,8 +542,9 @@ HTML_TEMPLATE = """
 
         .latest-star-title {
             margin-top: 0.35rem;
-            font-size: 1.45rem;
+            font-size: 2rem;
             font-weight: 800;
+            line-height: 1.15;
         }
 
         .latest-star-meta {
@@ -880,7 +1001,30 @@ HTML_TEMPLATE = """
             }
 
             .latest-star-title {
-                font-size: 1.15rem;
+                font-size: 1.4rem;
+            }
+
+            .latest-star-text {
+                padding: 1rem 1.1rem 1.2rem;
+            }
+
+            .latest-star-text::after {
+                display: none;
+            }
+
+            .brand-logo {
+                width: 38px;
+                height: 38px;
+            }
+
+            .stat-tile {
+                min-width: 0;
+                flex: 1 1 0;
+                padding: 0.4rem 0.6rem;
+            }
+
+            .stat-num {
+                font-size: 1.2rem;
             }
         }
 
@@ -957,25 +1101,28 @@ HTML_TEMPLATE = """
 {% endmacro %}
 
 <header id="page-header">
-    <h1>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }}</h1>
+    <div class="brand">
+        <img class="brand-logo" src="/static/mesange.svg" alt="" width="48" height="48">
+        <div>
+            <h1>{{ "Birdcam Admin" if admin_mode else "Mangeoire Cam" }}</h1>
+            {% if not admin_mode %}<div class="brand-tag">Paris bird feeder</div>{% endif %}
+        </div>
+    </div>
 
     {% if not admin_mode %}
     <div class="public-info">
-        <div class="public-info-stats">
-            <span>{{ status.bird_count }} oiseaux</span>
-            <span class="sep">·</span>
-            <span>{{ status.star_count }} étoiles</span>
-            <span class="sep">·</span>
-            <span>{{ status.today_count }} aujourd'hui</span>
-            <span class="sep">·</span>
-            <span>{{ count }} affichées · page {{ page }}/{{ total_pages }}</span>
-            <span class="sep">·</span>
-            <span class="muted">{{ status.latest_date }}</span>
+        <div class="stat-tiles">
+            <div class="stat-tile"><span class="stat-num">{{ status.bird_count }}</span><span class="stat-label">birds</span></div>
+            <div class="stat-tile star"><span class="stat-num">{{ status.star_count }}</span><span class="stat-label">stars</span></div>
+            <div class="stat-tile today"><span class="stat-num">{{ status.today_count }}</span><span class="stat-label">today</span></div>
+        </div>
+        <div class="last-visit">
+            {% if status.last_bird_ago %}Last visit <strong>{{ status.last_bird_ago }}</strong> · {% endif %}{{ status.latest_date }} · page {{ page }}/{{ total_pages }}
         </div>
         {% if status.top_species %}
         <div class="public-info-species">
             {% for sp in status.top_species %}
-            <a href="/?filter=species&species={{ sp.name }}">{% if sp.french %}{{ sp.french }}{% else %}{{ sp.name }}{% endif %}</a><span class="sp-count">{{ sp.sure }}{% if sp.probable %}<span class="sp-probable" title="probables (confiance 0.3 à 0.6)"> +{{ sp.probable }} ?</span>{% endif %}</span>{% if not loop.last %}<span class="sep"> · </span>{% endif %}
+            <a href="/?filter=species&species={{ sp.name }}">{% if sp.french %}{{ sp.french }}{% else %}{{ sp.name }}{% endif %}<span class="sp-count">{{ sp.sure }}{% if sp.probable %}<span class="sp-probable" title="probables (confiance 0.3 à 0.6)"> +{{ sp.probable }} ?</span>{% endif %}</span></a>
             {% endfor %}
         </div>
         {% endif %}
@@ -983,8 +1130,7 @@ HTML_TEMPLATE = """
     {% endif %}
 
     <div class="hero-intro">
-        A Raspberry Pi watches the feeder, captures movement, and keeps track of the winged visitors.
-        Species identification is powered by a custom model trained on Paris garden birds — still learning, results will improve over time.
+        A Raspberry Pi watches a Paris bird feeder and names its visitors with a model trained on garden birds, still learning.
         <a href="https://toysfab.com/2026/05/une-camera-automatique-pour-mangeoire-a-oiseaux-avec-un-raspberry-pi/"
            target="_blank" rel="noopener noreferrer">Read the Toysfab build story</a>.
     </div>
@@ -1085,14 +1231,20 @@ HTML_TEMPLATE = """
 <section class="latest-star">
     <a href="/view/{{ latest_star.name }}?filter=star">
         <div class="latest-star-inner">
-            <img src="/thumb/{{ latest_star.name }}" alt="{{ latest_star.name }}">
+            <div class="latest-star-photo">
+                <img src="/image/{{ latest_star.name }}" alt="{{ latest_star.species_french or latest_star.species or 'Latest star' }}">
+            </div>
             <div class="latest-star-text">
                 <div class="latest-star-kicker">Latest star</div>
-                <div class="latest-star-title">A favourite visitor from the feeder</div>
-                <div class="latest-star-meta">
-                    {{ species_line(latest_star) }}
-                    <div class="meta-time">{{ latest_star.when }}</div>
+                <div class="latest-star-title">{{ latest_star.species_french or latest_star.species or "A favourite visitor" }}</div>
+                {% if latest_star.species %}
+                <div class="latest-star-certainty">
+                    <span class="certainty {{ '' if latest_star.species_sure else 'probable' }}"><span style="width: {{ latest_star.species_percent }}%"></span></span>
+                    Certainty {{ latest_star.species_percent }} %
                 </div>
+                {% endif %}
+                <div class="latest-star-meta"><div class="meta-time">{{ latest_star.when }}</div></div>
+                <span class="latest-star-cta">View photo</span>
             </div>
         </div>
     </a>
@@ -2364,6 +2516,18 @@ def run_camera_test():
     return result
 
 
+def format_ago(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        return f"{seconds // 60} min ago"
+    if seconds < 86400:
+        return f"{seconds // 3600} h ago"
+    days = seconds // 86400
+    return "yesterday" if days == 1 else f"{days} days ago"
+
+
 def build_status(all_images):
     if all_images:
         latest = all_images[0]
@@ -2380,6 +2544,8 @@ def build_status(all_images):
     total_gb = disk.total / (1024 ** 3)
     used_percent = (disk.used / disk.total) * 100
 
+    last_bird = next((image for image in all_images if image["kind"] == "bird"), None)
+
     # Top espèces : compter les species uniques sur les photos bird_
     top_species = rank_species(all_images, 5)
 
@@ -2391,6 +2557,7 @@ def build_status(all_images):
         "motion_count": sum(1 for image in all_images if image["kind"] == "motion"),
         "star_count": sum(1 for image in all_images if image["starred"]),
         "today_count": sum(1 for image in all_images if image["day"] == today_key and image["kind"] == "bird"),
+        "last_bird_ago": format_ago(time.time() - last_bird["mtime"]) if last_bird else None,
         "latest_name": latest_name,
         "latest_date": latest_date,
         "free_gb": f"{free_gb:.1f}",
