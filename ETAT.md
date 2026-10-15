@@ -2,7 +2,7 @@
 
 > État partagé du projet. Toute session ou tout agent, quel que soit le modèle, le lit en premier et le met à jour en dernier (rôle de l'archiviste). La carte du projet est `AGENTS.md`. Ce dépôt n'a pas de `DECISIONS.md` : les décisions et leurs motifs sont dans les messages de commit.
 
-Dernière mise à jour : 2026-10-07 par Claude (archiviste, correctif iPhone des clips déployé, vérification sur iPhone en attente)
+Dernière mise à jour : 2026-10-15 par Claude (archiviste, favicon et refonte de l'accueil de la galerie déployés, vérification sur iPhone des clips toujours en attente)
 
 ## Quel est l'objectif ?
 
@@ -21,7 +21,16 @@ Un agent n'est jamais responsable d'un arbitrage : il propose, FX tranche.
 
 ## Où en est-on ?
 
-Le Pi est à jour avec `main` (HEAD `af46388`, `git pull` fait le 2026-10-07). Déployé et vérifié depuis, tous fusionnés par accord explicite de FX :
+Le Pi est à jour avec `main` (HEAD `c2920c9`, constaté le 2026-10-15 ; le Pi était à `af46388` au dernier état consigné, le 2026-10-07). Déployé et vérifié depuis, tous fusionnés par accord explicite de FX :
+
+**Favicon et refonte de l'accueil de la galerie : fusionnés et déployés** (favicon commité le 2026-10-08, accueil le 2026-10-14 ; tout est dans `gallery/app.py`, `gallery/static/` et les tests de la galerie ; la date de déploiement n'est pas consignée).
+- **Favicon** (5d36f2b, 3e9ce9c, b2c7802, 3949c4a) : `gallery/static/mesange.svg` sert de favicon à toutes les pages ; replis PNG `favicon-32.png` (onglet, 32 px) et `apple-touch-icon.png` (écran d'accueil iPhone, 180 px) ; le picto a été remplacé par une nouvelle version et les PNG re-rendus. Tests : ce que `/static` peut servir et les déclarations de favicon (relecture adverse).
+- **Refonte de l'accueil** (3fc431f, 3438a84) : logo en en-tête, tuiles de statistiques, « Last visit » en relatif, pastilles d'espèces, vignette « Latest star » en pleine résolution. 3438a84 corrige la relecture adverse : colonne de texte de la carte « Latest star » à 260 px minimum (le titre n'est plus coupé entre 700 et 880 px), photo plafonnée à 70vh, date de « Last visit » = celle du dernier oiseau (pas d'une photo `motion_` plus récente), `overflow-anchor: none` (l'en-tête qui rétrécit au défilement faisait remonter la page en haut sous Chrome), CSS devenu inutile retiré, tests étendus.
+- **Restructuration de l'en-tête** (92a5baf) : introduction sous le titre, bande d'état, libellé « Most seen », filtres séparés des liens « Birds video » et « Stats », retrait de l'affichage « page x/y ».
+- **Débordement horizontal mobile** (74df6ee) : avec un filtre d'espèce actif, la ligne de navigation de l'accueil débordait en largeur sur mobile ; défaut trouvé par l'agent adversaire, corrigé, verrouillé par un test.
+- **Pastilles** (c2920c9) : les pastilles « Most seen » repassent à la ligne sur mobile (les cinq restent visibles) au lieu de défiler ; le défilement horizontal n'est pas signalé sous iOS.
+- **Arbitrages de FX** : pastilles en retour à la ligne (option B) ; en-tête compact inchangé (option B) : en admin, l'en-tête compact dépasse `scroll-margin-top: 8rem`, défaut préexistant, laissé tel quel ; tuiles et liens laissés tels quels.
+- Non vérifié ici : le détail du déploiement de c2920c9 sur le Pi (redémarrages, tests exécutés) ne m'a pas été transmis, seul le HEAD du Pi l'est.
 
 - **2026-09-27** (604597b à c6fcd3d) : restauration depuis macaron (`RESTORE.md`), contrôle de `corrections.json` avant sauvegarde dans `scripts/backup_usb.sh`, copies quotidiennes. Déployé sur le Pi le matin même. `scripts/test_backup_usb.sh` passe sur le Pi (7/7). Sauvegarde vérifiée sur macaron (`corrections_2026-09-27.json` présent).
 - **2026-09-27** (51784a0 + 4e3bc4f) : watchdog interne basé sur `SensorTimestamp` (l'ancien critère « aucun pixel changé 20 min » avait causé 25 relances à tort en 5 jours, la nuit et par temps calme). Angle mort accepté : images identiques avec horodatage qui avance.
@@ -35,6 +44,21 @@ Chaque changement a été relu par l'agent adversaire avant fusion.
 - horloge du Pi au démarrage (time-sync) non traitée ;
 - aucune alerte hors `systemctl status` en cas d'échec de sauvegarde ;
 - rsync macOS (`openrsync`) non testé en réel, seulement contre une cible locale.
+
+**Points ouverts de l'accueil et du favicon** (non tranchés) :
+- D3 : poids de la photo « hero » (288 Ko) ;
+- rafales repliées en public ;
+- vidéo en tête de page ;
+- route `/favicon.ico` (absente) ;
+- cache long des icônes ;
+- CSP et `nosniff` ;
+- fond blanc du PNG 32 px ;
+- droits d'usage du SVG du picto ;
+- vérification sur iPhone du premier clip réel (voir plus bas) ;
+- retour en haut au défilement (`overflow-anchor: none`) à confirmer sur appareil réel ;
+- défaut hors diff : le panneau admin « Top : » déborde à 375 px ;
+- défaut hors diff : le message de galerie vide affiche le chemin `capture_dir` ;
+- aucun test de mise en page : le repo n'a pas de navigateur sans interface, les tests ne vérifient que le HTML et le CSS rendus en texte.
 
 **Questions posées à FX, sans réponse à ce jour** :
 - garder « Correct » sur l'espèce présélectionnée comme confirmation explicite ;
