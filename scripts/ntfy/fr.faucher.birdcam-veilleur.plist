@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Veilleur de la birdcam sur macaron : un passage par minute. A copier dans ~/Library/LaunchAgents/ puis
+     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/fr.faucher.birdcam-veilleur.plist (voir ALARME_NTFY.md). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>fr.faucher.birdcam-veilleur</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/macaron/birdcam/surveillant_birdcam.py</string>
+  </array>
+  <key>StartInterval</key><integer>60</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardErrorPath</key><string>/Users/macaron/Library/Logs/birdcam-veilleur.log</string>
+</dict>
+</plist>

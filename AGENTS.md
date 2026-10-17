@@ -19,6 +19,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Installation sur le Pi | `scripts/install_services.sh`, `scripts/install_models.sh` |
 | Sauvegarde horaire des photos d'oiseaux vers macaron | `scripts/backup_usb.sh`, `systemd/birdcam-backup.*` |
 | Reconstruction après panne de carte SD, restauration d'une photo ou de `corrections.json` depuis macaron | `RESTORE.md`, `scripts/setup_system.sh` |
+| Alarme ntfy quand la birdcam ne répond plus (veilleur sur macaron : script, plist, installation, limites) | `scripts/ntfy/surveillant_birdcam.py`, `ALARME_NTFY.md`, test : `python3 scripts/test_surveillant_birdcam.py` |
 | Entraînement du modèle d'espèces | `training/` (le dataset n'est pas versionné) |
 | Documentation utilisateur | `README.md` |
 | Clip MP4 au prochain mouvement (bouton admin, page `/clips` (section « Birds video »), clips dans `clips/`, remux iPhone `fix_clip()`) : script one-shot, unité, tests | `scripts/record_next_motion.py`, `systemd/birdcam-clip.service`, `gallery/app.py`, `scripts/test_gallery_clips.py`, `scripts/test_record_next_motion.py` |

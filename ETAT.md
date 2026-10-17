@@ -21,6 +21,8 @@ Un agent n'est jamais responsable d'un arbitrage : il propose, FX tranche.
 
 ## Où en est-on ?
 
+**Alarme ntfy de la birdcam (2026-10-17, branche `agent/alarme-ntfy`, non fusionnée)** : veilleur sur macaron (`scripts/ntfy/surveillant_birdcam.py`, un passage par minute) qui sonde la galerie du Pi et prévient par ntfy.sh (sujet secret distinct de celui de spirubot) après 5 minutes sans réponse. Ne voit ni la capture arrêtée, ni le disque, ni la sauvegarde (choix de FX : Pi injoignable seulement) ; une page d'accueil en erreur ou une clé USB morte échappent aussi à la sonde, qui lit une page statique de la carte SD. Détail et installation : `ALARME_NTFY.md`. Testé par `scripts/test_surveillant_birdcam.py`. Rien sur le Pi n'est modifié.
+
 Le Pi est à jour avec `main` (HEAD `c2920c9`, constaté le 2026-10-15 ; le Pi était à `af46388` au dernier état consigné, le 2026-10-07). Déployé et vérifié depuis, tous fusionnés par accord explicite de FX :
 
 **Favicon et refonte de l'accueil de la galerie : fusionnés et déployés** (favicon commité le 2026-10-08, accueil le 2026-10-14 ; tout est dans `gallery/app.py`, `gallery/static/` et les tests de la galerie ; la date de déploiement n'est pas consignée).
