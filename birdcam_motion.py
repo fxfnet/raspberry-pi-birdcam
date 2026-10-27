@@ -608,7 +608,12 @@ try:
                 )
                 atomic_rename(temp_filename, final_filename)
 
-            blob, blob_px, luma_shift = motion_metrics(threshold_image, previous_gray, gray)
+            # Mesure passive : elle ne doit jamais faire tomber la capture.
+            try:
+                blob, blob_px, luma_shift = motion_metrics(threshold_image, previous_gray, gray)
+            except Exception as error:
+                print(f"motion_metrics failed: {error}", file=sys.stderr)
+                blob = blob_px = luma_shift = float("nan")
             bird_any = any(d[4] for d in detections)
             species_str = f" | espèce: {species_label} ({species_conf:.2f})" if species_label else ""
             print(

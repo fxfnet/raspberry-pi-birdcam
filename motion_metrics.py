@@ -16,6 +16,7 @@ def motion_metrics(threshold_image, previous_gray, gray):
     blob       surface de la plus grande tache de mouvement (taches proches fusionnées)
     blob_px    pixels réellement changés dans cette tache
     luma_shift écart de luminosité moyenne entre les deux images (soleil, nuage)
+    Unités : image de mouvement (640x480, niveaux de gris floutés), pas l'image caméra.
     """
     closed = cv2.morphologyEx(threshold_image, cv2.MORPH_CLOSE, CLOSE_KERNEL)
     count, labels, stats, _ = cv2.connectedComponentsWithStats(closed)
