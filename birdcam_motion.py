@@ -14,6 +14,8 @@ import re
 import os
 import socket
 
+from motion_metrics import motion_metrics
+
 
 
 # ------------------------------------------------------------
@@ -606,10 +608,12 @@ try:
                 )
                 atomic_rename(temp_filename, final_filename)
 
+            blob, blob_px, luma_shift = motion_metrics(threshold_image, previous_gray, gray)
             bird_any = any(d[4] for d in detections)
             species_str = f" | espèce: {species_label} ({species_conf:.2f})" if species_label else ""
             print(
                 f"Motion: {motion_score} | "
+                f"blob={blob} blob_px={blob_px} luma_shift={luma_shift:.1f} | "
                 f"burst=0-{BURST_COUNT-1} | "
                 f"bird={bird_any}"
                 f"{species_str} | "
