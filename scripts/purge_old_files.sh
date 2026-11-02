@@ -11,8 +11,10 @@ DAYS_TO_KEEP_SUN=3
 echo "Purging motion pictures older than ${DAYS_TO_KEEP} days..."
 echo "Bird pictures are kept."
 
+# CAPTURE_DIR is a symlink to the USB drive on the Pi: find needs -H to follow it
+# (without it the purge silently deleted nothing).
 # Sun-marked motion pictures go first.
-find "${CAPTURE_DIR}" \
+find -H "${CAPTURE_DIR}" \
   -type f \
   -name "motion_*_sun.jpg" \
   -mtime +"${DAYS_TO_KEEP_SUN}" \
@@ -20,7 +22,7 @@ find "${CAPTURE_DIR}" \
   -delete
 
 # Delete only old motion pictures.
-find "${CAPTURE_DIR}" \
+find -H "${CAPTURE_DIR}" \
   -type f \
   \( -name "motion_*.jpg" -o -name "motion_*.jpeg" -o -name "motion_*.png" \) \
   -mtime +"${DAYS_TO_KEEP}" \

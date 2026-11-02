@@ -5,8 +5,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export HOME="$(mktemp -d)"
+REAL="$(mktemp -d)"
 CAP="${HOME}/birdcam/captures"
-mkdir -p "${CAP}"
+mkdir -p "${HOME}/birdcam"
+ln -s "${REAL}" "${CAP}"  # comme sur le Pi : captures est un lien vers la clé USB
 old() { # fichier, âge en jours (touch -d n'existe pas sous macOS)
   python3 -c "import os,sys,time; t=time.time()-float(sys.argv[2])*86400; os.utime(sys.argv[1],(t,t))" "${CAP}/$1" "$2"
 }
