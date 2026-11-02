@@ -2,7 +2,7 @@
 
 > État partagé du projet. Toute session ou tout agent, quel que soit le modèle, le lit en premier et le met à jour en dernier (rôle de l'archiviste). La carte du projet est `AGENTS.md`. Ce dépôt n'a pas de `DECISIONS.md` : les décisions et leurs motifs sont dans les messages de commit.
 
-Dernière mise à jour : 2026-10-15 par Claude (archiviste, favicon et refonte de l'accueil de la galerie déployés, vérification sur iPhone des clips toujours en attente)
+Dernière mise à jour : 2026-11-02 par Claude (archiviste, faux déclenchements : marquage `_sun` et purge corrigée, déployés sur le Pi depuis la branche `agent/faux-positifs`, non fusionnés)
 
 ## Quel est l'objectif ?
 
@@ -21,9 +21,28 @@ Un agent n'est jamais responsable d'un arbitrage : il propose, FX tranche.
 
 ## Où en est-on ?
 
+**Faux déclenchements, marquage `_sun` et purge (2026-10-27 à 2026-11-02, branche `agent/faux-positifs`, HEAD `6ba6025`, poussée sur origin, NON fusionnée dans `main`, DÉPLOYÉE sur le Pi)** : le Pi n'est donc plus à jour avec `main` mais sur cette branche. Après fusion par FX : `git checkout main && git pull` sur le Pi, puis redémarrage de `birdcam`, `birdcam-gallery`, `birdcam-gallery-admin`.
+- Problème signalé par FX : trop de faux déclenchements (feuilles, soleil). Mesure initiale sur 199 rafales du Pi : 83 (42 %) sans oiseau dans aucune des 8 images. Une première estimation de 73 % était fausse (elle ne regardait que la première image). Rejeu : total de pixels, taille de tache et saut de luminosité intra-rafale séparent mal (AUC 0,6) ; la paire d'images qui déclenche n'étant pas enregistrée, c'était un indicateur approché, trompeur pour la luminosité.
+- c00a1c3 + 2e2e16c : journal de `blob`, `blob_px` et `luma_shift` à chaque déclenchement (`motion_metrics.py`, test `scripts/test_motion_metrics.py`), protégé par try (relecture adverse). Déployé le 2026-10-27.
+- Données réelles du 28 octobre au 2 novembre : 127 déclenchements, 5 avec oiseau (MobileNet), 122 sans. `luma_shift` médiane 0,3 (oiseaux) contre 3,6 (autres), AUC 0,81. Le seuil 3,4 écarte 63 des 122 sans perdre l'un des 5 oiseaux. Échantillon de 5 oiseaux : fragile.
+- **Choix de FX (option 4)** (6186384) : continuer à déclencher, mais marquer `_sun` les rafales sans oiseau dont `luma_shift` > `SUN_LUMA_SHIFT` = 3,4 ; les masquer de All et de Motion only ; filtre « Sun » ; purge à 3 jours (`-mtime +3`, donc 4 jours pleins) contre 14 pour les autres `motion_`. Les photos `star_` ne sont jamais purgées.
+- Tri visuel par Claude des 63 rafales au-dessus de 3,4 (première et dernière image seulement) : aucun oiseau vu. Limites : 2 images sur 8, mangeoire non visible dans le cadre, une rafale nocturne noire.
+- **Défaut ancien trouvé par l'adversaire** : `~/birdcam/captures` est un lien symbolique vers la clé USB, `find` sans `-H` ne descendait pas, donc la purge ne supprimait rien depuis toujours (831 des 1842 `motion_` avaient plus de 14 jours). Corrigé par `find -H` (6ba6025), test sur lien symbolique. FX a choisi de corriger après passe à blanc et tri visuel. Avant correction, copie des 831 fichiers sur le Mac : `~/Movies/birdcam/motion_avant_purge_2026-11-02` (213 Mo).
+- **Déploiement** : le Pi est sur la branche `agent/faux-positifs` (HEAD `6ba6025`). Services `birdcam`, `birdcam-gallery`, `birdcam-gallery-admin` redémarrés le 2026-11-02 vers 23 h 35, tests passés sur le Pi. **La première purge effective est prévue à minuit (2026-11-03) et supprimera les 831 photos** (copie de sauvegarde sur le Mac, voir ci-dessus).
+- **Défauts connus de la relecture, non corrigés** (FX n'a pas répondu) :
+  - l'étoile d'une rafale `_sun` la masque de All ;
+  - le lien « Sun » est visible en public ;
+  - un suffixe après `_sun` (`_sun_1`, `_sun_sp…`) annule le masquage et la purge rapide (erreur dans le sens prudent) ;
+  - le `motion_count` de l'admin inclut les `_sun` ;
+  - le marquage n'a pas de fonction pure testée ;
+  - risque : un oiseau non détecté par MobileNet, en gros plan, dépasse 3,4 (calcul : 10 % de l'image à 40 niveaux = 4,0), est masqué puis purgé en 4 jours ;
+  - seuil mesuré sur 6 jours d'octobre : la saison est à revoir.
+- **Déclencheur de révision proposé du seuil** (à confirmer par FX) : 30 rafales d'oiseaux journalisées, ou un oiseau trouvé dans Sun.
+- **Constat hors sujet, non investigué** : `birdcam-clip.service` est en état `failed` depuis le 2026-10-19 12:41 (après 1 h 10 d'attente, 36 min de CPU). L'état `failed` à l'annulation était connu et cosmétique (essai 2 du 2026-10-06) ; ici la durée et le CPU consommé sont différents, la cause n'est pas établie.
+
 **Alarme ntfy de la birdcam (2026-10-17, branche `agent/alarme-ntfy`, non fusionnée)** : veilleur sur macaron (`scripts/ntfy/surveillant_birdcam.py`, un passage par minute) qui sonde la galerie du Pi et prévient par ntfy.sh (sujet secret distinct de celui de spirubot) après 5 minutes sans réponse. Ne voit ni la capture arrêtée, ni le disque, ni la sauvegarde (choix de FX : Pi injoignable seulement) ; une page d'accueil en erreur ou une clé USB morte échappent aussi à la sonde, qui lit une page statique de la carte SD. Détail et installation : `ALARME_NTFY.md`. Testé par `scripts/test_surveillant_birdcam.py`. Rien sur le Pi n'est modifié.
 
-Le Pi est à jour avec `main` (HEAD `c2920c9`, constaté le 2026-10-15 ; le Pi était à `af46388` au dernier état consigné, le 2026-10-07). Déployé et vérifié depuis, tous fusionnés par accord explicite de FX :
+Au 2026-10-15, le Pi était à jour avec `main` (HEAD `c2920c9`) ; il est depuis le 2026-11-02 sur la branche `agent/faux-positifs`, voir ci-dessus. Il était à `af46388` au dernier état consigné, le 2026-10-07. Déployé et vérifié entre-temps, tous fusionnés par accord explicite de FX :
 
 **Favicon et refonte de l'accueil de la galerie : fusionnés et déployés** (favicon commité le 2026-10-08, accueil le 2026-10-14 ; tout est dans `gallery/app.py`, `gallery/static/` et les tests de la galerie ; la date de déploiement n'est pas consignée).
 - **Favicon** (5d36f2b, 3e9ce9c, b2c7802, 3949c4a) : `gallery/static/mesange.svg` sert de favicon à toutes les pages ; replis PNG `favicon-32.png` (onglet, 32 px) et `apple-touch-icon.png` (écran d'accueil iPhone, 180 px) ; le picto a été remplacé par une nouvelle version et les PNG re-rendus. Tests : ce que `/static` peut servir et les déclarations de favicon (relecture adverse).
@@ -129,6 +148,7 @@ Décisions de FX (2026-10-06) : clips publics ; sauvegarde des clips vers macaro
 - Lecture du dossier de captures : environ 150 à 200 ms sur le Pi pour 650 à 780 fichiers (mesures 0a61eef et 4b89298).
 - Essai de clip du 2026-10-06 : lancé sur le Pi à 08:00:09, mouvement à 09:27:17 (score 991), clip `/mnt/birdcam-usb/clips/clip_20261006_092717.mp4`, 4,4 Mo, H.264 1280x960, 8,9 s. Capture photo relancée à 09:27:30, service `birdcam` actif. Pendant l'attente (environ 87 min), aucune photo n'a été prise : la caméra ne sert qu'à un programme à la fois. Clip copié sur le Mac dans `~/Movies/birdcam/`. Contenu non jugé.
 - Essais du clip par le vrai chemin le 2026-10-06 au soir : voir « Essais réels » plus haut. Constats : le conflit arrête et relance `birdcam` comme prévu, un `systemctl kill` de toute l'unité laisse `birdcam` arrêté (cgroup entier tué, `ExecStopPost` compris), un kill du seul processus principal est rattrapé.
+- Faux déclenchements (octobre 2026) : 42 % des rafales sans oiseau sur 199 ; `luma_shift` sépare mieux (AUC 0,81 sur 127 déclenchements, dont 5 oiseaux seulement) que pixels ou taille de tache (AUC 0,6). Chiffres détaillés plus haut.
 - Hors repo : `~/.ssh/known_hosts` et le bloc `Host oaso.local` de `~/.ssh/config` corrigés côté Mac.
 
 ## Quels paris sont engagés ?
@@ -140,6 +160,7 @@ Un pari est un investissement de temps, d'effort ou d'argent sur une évaluation
 
 ## Quelle est la prochaine action ?
 
+0. **Au 2026-11-03 : vérifier le premier fichier `_sun` et la galerie** (filtre Sun, masquage de All), et que la purge de minuit a bien supprimé les 831 photos. FX décide ensuite de la fusion de `agent/faux-positifs`, des corrections de relecture listées plus haut, et de l'investigation de `birdcam-clip.service` (`failed` depuis le 2026-10-19).
 1. **FX : ouvrir sur iPhone le premier clip réel produit par le script déployé** (variante `d`, jamais vue sur iPhone), et relever la durée de `fix_clip` dans `journalctl -u birdcam-clip`.
 2. FX choisit ensuite la suite parmi les options ci-dessous. Les trois essais réels du clip sont faits.
 
