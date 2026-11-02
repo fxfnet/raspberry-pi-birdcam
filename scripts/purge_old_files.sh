@@ -5,9 +5,19 @@ CAPTURE_DIR="${HOME}/birdcam/captures"
 THUMB_DIR="${HOME}/birdcam/gallery/thumbs"
 
 DAYS_TO_KEEP=14
+# Rafales sans oiseau marquées _sun (soleil, nuage) : gardées peu de temps.
+DAYS_TO_KEEP_SUN=3
 
 echo "Purging motion pictures older than ${DAYS_TO_KEEP} days..."
 echo "Bird pictures are kept."
+
+# Sun-marked motion pictures go first.
+find "${CAPTURE_DIR}" \
+  -type f \
+  -name "motion_*_sun.jpg" \
+  -mtime +"${DAYS_TO_KEEP_SUN}" \
+  -print \
+  -delete
 
 # Delete only old motion pictures.
 find "${CAPTURE_DIR}" \

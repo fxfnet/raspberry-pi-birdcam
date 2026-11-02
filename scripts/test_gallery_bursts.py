@@ -161,5 +161,23 @@ page = client.get("/", headers={"X-Forwarded-Proto": "https"}).get_data(as_text=
 check("og:url en https derrière le proxy", 'content="https://localhost/"' in page)
 check("ProxyFix configuré avec x_for=0", app.app.wsgi_app.x_for == 0 and app.app.wsgi_app.x_proto == 1)
 
+# Rafales _sun (soleil, nuage) : absentes de All et de Motion only, visibles dans Sun.
+reset()
+sun = burst("motion", "130000", 3000, mtime=4000)
+for name in sun:
+    (CAPTURES / name).rename(CAPTURES / name.replace(".jpg", "_sun.jpg"))
+plain = burst("motion", "130100", 3100, mtime=4100)
+bird = burst("bird", "130200", 3200, mtime=4200)
+names = lambda mode: {i["name"] for i in app.filter_images(app.get_all_images(), mode)}
+check("All : rafale _sun écartée", not any(n.endswith("_sun.jpg") for n in names("all")) and len(names("all")) == 16)
+check("Motion only : rafale _sun écartée", names("motion") == set(plain))
+check("Sun : seulement la rafale _sun", len(names("sun")) == 8 and all(n.endswith("_sun.jpg") for n in names("sun")))
+check("Birds : inchangé", names("bird") == set(bird))
+check("page /?filter=sun répond", client.get("/?filter=sun").status_code == 200)
+check("lien Sun dans la galerie", 'href="/?filter=sun' in client.get("/").get_data(as_text=True))
+starred = "star_" + sun[0].replace(".jpg", "_sun.jpg")
+(CAPTURES / (sun[0].replace(".jpg", "_sun.jpg"))).rename(CAPTURES / starred)
+check("photo étoilée _sun : visible dans Stars", starred in names("star"))
+
 print("Tous les tests passent." if not FAILURES else f"{len(FAILURES)} échec(s).")
 sys.exit(1 if FAILURES else 0)

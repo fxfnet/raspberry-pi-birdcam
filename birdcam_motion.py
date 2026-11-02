@@ -97,6 +97,11 @@ WATCHDOG_TIMEOUT_SECONDS = 120
 MOTION_THRESHOLD = 1200
 PIXEL_DIFF_THRESHOLD = 30
 
+# Une rafale sans oiseau dont la luminosité moyenne a sauté de plus que cela au
+# déclenchement est marquée "_sun". Mesuré le 2026-11-02 sur 127 déclenchements :
+# médiane 0,3 pour les oiseaux (5), 3,6 pour les autres (122).
+SUN_LUMA_SHIFT = 3.4
+
 
 # ------------------------------------------------------------
 # Bird recognition settings
@@ -594,27 +599,33 @@ try:
 
             sp_suffix = f"_sp{species_label}_spconf{species_conf:.2f}" if species_label else ""
 
-            # Renommer avec le résultat final.
-            for burst_index, timestamp, _, temp_filename, bd, bl, bs, _, _ in detections:
-                label_for_filename = safe_label(bl)
-                prefix = "bird" if bd else "motion"
-                final_filename = CAPTURE_DIR / (
-                    f"{prefix}_{timestamp}"
-                    f"_burst{burst_index}"
-                    f"_motion{motion_score}"
-                    f"_conf{bs:.2f}"
-                    f"_best{label_for_filename}"
-                    f"{sp_suffix}.jpg"
-                )
-                atomic_rename(temp_filename, final_filename)
-
             # Mesure passive : elle ne doit jamais faire tomber la capture.
             try:
                 blob, blob_px, luma_shift = motion_metrics(threshold_image, previous_gray, gray)
             except Exception as error:
                 print(f"motion_metrics failed: {error}", file=sys.stderr)
                 blob = blob_px = luma_shift = float("nan")
-            bird_any = any(d[4] for d in detections)
+
+            burst_has_bird = any(d[4] for d in detections)
+
+            # Renommer avec le résultat final.
+            for burst_index, timestamp, _, temp_filename, bd, bl, bs, _, _ in detections:
+                label_for_filename = safe_label(bl)
+                prefix = "bird" if bd else "motion"
+                # Sans oiseau et avec un saut de luminosité : soleil ou nuage.
+                # Gardée (rien n'est perdu), mais écartée de la galerie et purgée plus vite.
+                sun_suffix = "_sun" if (not burst_has_bird and luma_shift > SUN_LUMA_SHIFT) else ""
+                final_filename = CAPTURE_DIR / (
+                    f"{prefix}_{timestamp}"
+                    f"_burst{burst_index}"
+                    f"_motion{motion_score}"
+                    f"_conf{bs:.2f}"
+                    f"_best{label_for_filename}"
+                    f"{sp_suffix}{sun_suffix}.jpg"
+                )
+                atomic_rename(temp_filename, final_filename)
+
+            bird_any = burst_has_bird
             species_str = f" | espèce: {species_label} ({species_conf:.2f})" if species_label else ""
             print(
                 f"Motion: {motion_score} | "

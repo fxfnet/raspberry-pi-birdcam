@@ -1201,6 +1201,7 @@ HTML_TEMPLATE = """
             <a class="filter {{ 'active' if mode == 'star' else '' }}" href="/?filter=star&per_page={{ per_page }}">Stars</a>
             <a class="filter {{ 'active' if mode == 'all' else '' }}" href="/?filter=all&per_page={{ per_page }}">All</a>
             <a class="filter {{ 'active' if mode == 'motion' else '' }}" href="/?filter=motion&per_page={{ per_page }}">Motion only</a>
+            <a class="filter {{ 'active' if mode == 'sun' else '' }}" href="/?filter=sun&per_page={{ per_page }}">Sun</a>
             {% if mode == 'species' and species_query %}
             <a class="filter active" href="/?filter=bird&per_page={{ per_page }}">× {{ species_query }}</a>
             {% endif %}
@@ -2359,6 +2360,7 @@ def parse_image_metadata(path: Path):
         "kind": kind,
         "kind_label": kind_label,
         "kind_class": kind_class,
+        "suspect": kind == "motion" and clean_name.endswith("_sun.jpg"),
         "starred": starred,
         "confidence": confidence,
         "best_label": best_label,
@@ -2403,7 +2405,10 @@ def filter_images(images, mode: str, species_query: str = ""):
         return [image for image in images if image["day"] == today_key and image["kind"] == "bird"]
 
     if mode == "motion":
-        return [image for image in images if image["kind"] == "motion"]
+        return [image for image in images if image["kind"] == "motion" and not image["suspect"]]
+
+    if mode == "sun":
+        return [image for image in images if image["suspect"]]
 
     if mode == "species" and species_query:
         q = species_query.lower()
@@ -2412,7 +2417,7 @@ def filter_images(images, mode: str, species_query: str = ""):
             if image["kind"] == "bird" and (image.get("species") or "").lower() == q
         ]
 
-    return images
+    return [image for image in images if not image["suspect"]]
 
 
 BURST_NAME_RE = re.compile(r"_(\d{8})_(\d{2})(\d{2})(\d{2})_(\d{3})_burst(\d+)_motion(\d+)")
@@ -2900,7 +2905,7 @@ def current_nav_args_from_form():
     page = request.form.get("page", "1")
     per_page = request.form.get("per_page", str(DEFAULT_PER_PAGE))
 
-    if mode not in {"all", "bird", "motion", "star", "today"}:
+    if mode not in {"all", "bird", "motion", "sun", "star", "today"}:
         mode = "bird"
 
     return mode, page, per_page
@@ -2920,7 +2925,7 @@ def index():
     mode = request.args.get("filter", "bird")
     species_query = request.args.get("species", "")
 
-    if mode not in {"all", "bird", "motion", "star", "today", "species"}:
+    if mode not in {"all", "bird", "motion", "sun", "star", "today", "species"}:
         mode = "bird"
 
     page = parse_int_arg("page", 1, 1, 100000)
@@ -2970,7 +2975,7 @@ def view_nav_args(source, species_key):
     le filtre voyage donc sous "species_filter".
     """
     mode = source.get("filter", "bird")
-    if mode not in {"all", "bird", "motion", "star", "today", "species"}:
+    if mode not in {"all", "bird", "motion", "sun", "star", "today", "species"}:
         mode = "bird"
     species_query = source.get(species_key, "")
     try:

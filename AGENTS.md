@@ -16,6 +16,7 @@ Caméra de mangeoire sur Raspberry Pi 3B (caméra OV5647, Debian Trixie, Python 
 | Test de la galerie (rafales, légendes, `og:url`), sans caméra ni OpenCV | `scripts/test_gallery_bursts.py` |
 | Icônes de la galerie (favicon `mesange.svg`, replis PNG 32 px et apple-touch-icon) | `gallery/static/`, déclarations dans `gallery/app.py`, verrouillées par `scripts/test_gallery_clips.py` et `scripts/test_gallery_bursts.py` |
 | Mesures du déclenchement journalisées (blob, blob_px, luma_shift) pour rejouer des filtres anti-fausses alarmes : module et test | `motion_metrics.py`, `scripts/test_motion_metrics.py` |
+| Rafales `_sun` (sans oiseau, saut de luminosité > `SUN_LUMA_SHIFT`) : marquage à la capture, filtre « Sun » de la galerie, purge à 3 jours | `birdcam_motion.py`, `gallery/app.py`, `scripts/purge_old_files.sh`, tests : `scripts/test_gallery_bursts.py`, `bash scripts/test_purge_old_files.sh` |
 | Services et minuteries (capture, galerie, admin, purge, redémarrage nocturne) | `systemd/` |
 | Installation sur le Pi | `scripts/install_services.sh`, `scripts/install_models.sh` |
 | Sauvegarde horaire des photos d'oiseaux vers macaron | `scripts/backup_usb.sh`, `systemd/birdcam-backup.*` |
