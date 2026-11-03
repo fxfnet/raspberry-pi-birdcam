@@ -116,6 +116,25 @@ check("SIGTERM pendant le nettoyage : close et relance quand même",
 events = run(on_stop_recording=lambda: (_ for _ in ()).throw(RuntimeError("gel")))
 check("stop_recording échoue : close est tout de même appelé", "close" in events and events[-1] == "systemctl start")
 
+# Aucun mouvement avant la fin de l'attente : sortie 0, sinon systemd garde l'unité en "failed".
+class IdleCamera(FakeCamera):
+    def start_recording(self, *_):
+        pass
+
+
+events = []
+COMMANDS.clear()
+saved = (record.subprocess.run, record.Picamera2, record.motion_gray, record.MAX_WAIT_SECONDS, record.WARMUP_SECONDS)
+record.subprocess.run = lambda cmd, **_kw: events.append("systemctl " + cmd[2])
+record.Picamera2 = lambda: IdleCamera(events)
+record.motion_gray = lambda _camera: 0
+record.MAX_WAIT_SECONDS = 0
+record.WARMUP_SECONDS = 0
+record.CLIPS_DIR = Path(os.environ["HOME"]) / "clips"
+code = record.main()
+record.subprocess.run, record.Picamera2, record.motion_gray, record.MAX_WAIT_SECONDS, record.WARMUP_SECONDS = saved
+check("aucun mouvement : sortie 0 et capture photo relancée", code == 0 and events[-1] == "systemctl start")
+
 unit = (ROOT / "systemd" / "birdcam-clip.service").read_text()
 check("l'unité relance birdcam sans attente, quelle que soit la sortie",
       re.search(r"^ExecStopPost=\+?/usr/bin/systemctl start --no-block birdcam\.service", unit, re.M) is not None)

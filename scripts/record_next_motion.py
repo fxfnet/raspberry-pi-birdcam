@@ -137,8 +137,9 @@ def main():
                 log(f"Clip enregistré : {path} ({path.stat().st_size // 1024} Ko)")
                 return 0
 
+        # Issue normale, pas une panne : sortir en 1 laissait birdcam-clip en "failed" dans systemd.
         log("Aucun mouvement dans le délai, pas de clip")
-        return 1
+        return 0
     finally:
         # Un second signal (clic sur Annuler pendant le nettoyage) ne doit pas
         # sauter la relance de la capture photo.
